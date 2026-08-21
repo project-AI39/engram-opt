@@ -38,8 +38,8 @@ func (e *Encoder) EncodeChunk(ctx context.Context, inputPath string, scene domai
 	if !toolbin.FileExists(inputPath) {
 		return fmt.Errorf("input file not found: %s", inputPath)
 	}
-	if scene.FrameCount() <= 0 {
-		return fmt.Errorf("invalid scene frame count: %d", scene.FrameCount())
+	if err := scene.Validate(); err != nil {
+		return fmt.Errorf("invalid scene: %w", err)
 	}
 	ffmpegPath, err := toolbin.Resolve("ffmpeg")
 	if err != nil {
@@ -67,7 +67,11 @@ func (e *Encoder) EncodeChunk(ctx context.Context, inputPath string, scene domai
 		args = append(args, "-c:v", "libx265", "-preset", params.Preset, "-crf", crf,
 			"-sc_threshold", "0")
 	case domain.CodecAV1:
-		args = append(args, "-c:v", "libsvtav1", "-preset", svtPreset(params.Preset), "-crf", crf)
+		sp, perr := svtPreset(params.Preset)
+		if perr != nil {
+			return perr
+		}
+		args = append(args, "-c:v", "libsvtav1", "-preset", sp, "-crf", crf)
 	default:
 		return fmt.Errorf("unsupported codec: %q", params.Codec)
 	}
@@ -89,6 +93,12 @@ func (e *Encoder) ConcatChunks(ctx context.Context, chunkPaths []string, finalOu
 	ffmpegPath, err := toolbin.Resolve("ffmpeg")
 	if err != nil {
 		return err
+	}
+
+	// --out に未存在ディレクトリを指定された場合でも難解なffmpegエラーにならないよう、
+	// 出力先の親ディレクトリをここで用意する。
+	if err := os.MkdirAll(filepath.Dir(finalOutputPath), 0o755); err != nil {
+		return fmt.Errorf("creating output dir: %w", err)
 	}
 
 	// リストファイルはユーザーの出力先を汚さないよう一時ディレクトリへ出す。
@@ -120,19 +130,21 @@ func (e *Encoder) ConcatChunks(ctx context.Context, chunkPaths []string, finalOu
 
 // svtPreset は x264/x265 流儀の preset 名を SVT-AV1 の数値プリセットへ変換する。
 // SVT-AV1 は数値のみを受け付けるための解決層（値は一般的な対応表に基づく近似）。
-func svtPreset(preset string) string {
+// 数値文字列はそのまま透過し、それ以外の未知名は黙って代替せずエラーにする
+// （ユーザーの指定ミスを早期に表面化させるため）。
+func svtPreset(preset string) (string, error) {
 	m := map[string]string{
 		"veryslow": "1", "slower": "2", "slow": "4", "medium": "6",
 		"fast": "8", "faster": "10", "veryfast": "12", "superfast": "13",
 	}
 	if v, ok := m[preset]; ok {
-		return v
+		return v, nil
 	}
 	// 数値が直接来た場合はそのまま透過させる
 	if _, err := strconv.Atoi(preset); err == nil {
-		return preset
+		return preset, nil
 	}
-	return "6" // 不明な場合は medium 相当へフォールバック
+	return "", fmt.Errorf("unknown preset %q for av1/libsvtav1: use an x264-style name (veryslow..superfast) or a numeric preset", preset)
 }
 
 // concatEscape は concat リスト用にパス中のシングルクォートをエスケープする。

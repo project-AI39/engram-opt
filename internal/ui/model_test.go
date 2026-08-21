@@ -181,6 +181,26 @@ func TestLogRouterNilMirror(t *testing.T) {
 	}
 }
 
+// 極小/極大の端末幅でも進捗バーの幅がクランプされ、描画が壊れないこと。
+func TestModelProgressWidthClamped(t *testing.T) {
+	m := testModel()
+
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 5, Height: 10})
+	m = next.(Model)
+	if m.progress.Width != 10 {
+		t.Fatalf("tiny window width = %d, want clamped to 10", m.progress.Width)
+	}
+	if v := m.View(); v == "" {
+		t.Fatal("view should still render on tiny windows")
+	}
+
+	next, _ = m.Update(tea.WindowSizeMsg{Width: 500, Height: 10})
+	m = next.(Model)
+	if m.progress.Width != 60 {
+		t.Fatalf("huge window width = %d, want capped at 60", m.progress.Width)
+	}
+}
+
 func TestViewRendersStatesWithoutPanic(t *testing.T) {
 	m := testModel()
 	m.width = 100

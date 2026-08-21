@@ -50,6 +50,9 @@ func BisectScene(ctx context.Context, enc domain.VideoEncoder, ev domain.Quality
 	if cfg.MinCRF > cfg.MaxCRF {
 		return nil, fmt.Errorf("invalid CRF range: min=%d max=%d", cfg.MinCRF, cfg.MaxCRF)
 	}
+	if err := scene.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid scene: %w", err)
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

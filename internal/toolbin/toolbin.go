@@ -56,13 +56,12 @@ func Resolve(name string) (string, error) {
 			return p, nil
 		}
 	}
-	root, err := RepoRoot()
-	if err != nil {
-		return "", fmt.Errorf("binary %q not found: %w", name, err)
+	if root, err := RepoRoot(); err == nil {
+		p := filepath.Join(root, "build", "bin", name)
+		if FileExists(p) {
+			return p, nil
+		}
 	}
-	p := filepath.Join(root, "build", "bin", name)
-	if FileExists(p) {
-		return p, nil
-	}
-	return "", fmt.Errorf("binary %q not found; run 'go run ./cmd/engram setup' first", name)
+	// リポジトリ外実行などでルートが取れない場合でも、対処法（setup）を必ず案内する
+	return "", fmt.Errorf("binary %q not found; run 'go run ./cmd/engram setup' first (looked in <exe>/../bin and <repo>/build/bin)", name)
 }

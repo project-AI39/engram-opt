@@ -15,7 +15,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
-		m.progress.Width = min(msg.Width-16, 60)
+		// 極小端末で負/極小幅になり render が壊れないよう下限を設ける
+		w := msg.Width - 16
+		if w > 60 {
+			w = 60
+		}
+		if w < 10 {
+			w = 10
+		}
+		m.progress.Width = w
 		return m, nil
 
 	case tea.KeyMsg:
@@ -99,11 +107,4 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	return m, nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

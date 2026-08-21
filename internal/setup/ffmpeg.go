@@ -23,10 +23,15 @@ type ffmpegSource struct {
 }
 
 // URLとハッシュは不変。新しいOS/archへ対応するときはエントリを追加するだけ。
+//
+// 情報源: GyanD/codexffmpeg のGitHubリリース（タグpin・イミュータブル）。
+// gyan.dev 直URLは最新版しか保持されず旧パッケージが404になるためGitHub側をpinする。
+// digestはGitHub Release Assets APIの公式sha256と照合済み。
+// 変種は full_build を採用: essentials には libsvtav1 が含まれないため（2026-08実測）。
 var ffmpegSources = map[string]ffmpegSource{
 	"windows/amd64": {
-		url:    "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.1.2-essentials_build.zip",
-		sha256: "db580001caa24ac104c8cb856cd113a87b0a443f7bdf47d8c12b1d740584a2ec",
+		url:    "https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/ffmpeg-8.1.2-full_build.zip",
+		sha256: "b8cdefab5f50590a076c27c2b56b0294a0e6154faded28ba1ba05ebc4f801f57",
 	},
 }
 
@@ -150,7 +155,31 @@ func verifyTools(binDir string) error {
 		return err
 	}
 	log.Printf("[setup] vmaf filter found in ffmpeg")
+	// コーデック保証（memo.md 対応エンコーダ）: pinビルドの差し替えで欠落が
+	// 発生しても、パイプライン実行時ではなくsetup時点で検知できるようにする。
+	for _, enc := range []string{"libx264", "libx265", "libsvtav1"} {
+		if err := checkEncoderPresent(ffmpegPath, enc); err != nil {
+			return err
+		}
+	}
+	log.Printf("[setup] required encoders found (h264 / hevc / av1-svt)")
 	return nil
+}
+
+// checkEncoderPresent は -encoders 一覧に指定エンコーダが含まれることを確認する。
+func checkEncoderPresent(ffmpegPath, name string) error {
+	out, err := exec.Command(ffmpegPath, "-hide_banner", "-encoders").Output()
+	if err != nil {
+		return fmt.Errorf("-encoders failed: %w", err)
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		// -encoders の形式: " V....D <name> <description>"
+		if len(fields) >= 2 && fields[1] == name {
+			return nil
+		}
+	}
+	return fmt.Errorf("required encoder %q not found in this ffmpeg build; the pinned variant may have changed", name)
 }
 
 func checkVersion(exePath, expectPrefix string) error {

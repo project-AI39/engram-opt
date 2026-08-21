@@ -45,6 +45,11 @@ func (e *Evaluator) Name() string { return "libvmaf" }
 
 // Evaluate 元動画の該当シーン区間とエンコード済みチャンクを比較評価する。
 func (e *Evaluator) Evaluate(ctx context.Context, originalPath string, scene domain.Scene, encodedChunkPath string) (domain.QualityMetrics, error) {
+	// 他モジュール（engine/encoder）と同様、フレームSSOT不変条件を入口で検証する。
+	// 不正区間のまま filter_complex を組むと select が空になり評価が無意味になるため。
+	if err := scene.Validate(); err != nil {
+		return domain.QualityMetrics{}, fmt.Errorf("invalid scene: %w", err)
+	}
 	ffmpegPath, err := toolbin.Resolve("ffmpeg")
 	if err != nil {
 		return domain.QualityMetrics{}, err

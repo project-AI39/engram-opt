@@ -7,11 +7,19 @@
 - 設計の唯一の情報源は `memo.md`。作業前に必ず読むこと。
 - 構想: Go製の動画最適化CLI（シーン分割 → エンコード → VMAF v1評価 → CRF二分探索のPer-Shot最適化）＋TUIダッシュボード。1日単位の無人動作を想定。
 
+## テスト方針
+
+- **配置**: 単体テストは各パッケージ内の `*_test.go`。実バイナリを使う統合テストは同パッケージの `integration_test.go`。パイプライン全走査は `test/e2e/`。
+- **ガード**: 統合/E2Eは冒頭で `testutil.RequireBinaries(t, ...)` を呼ぶ（`-short` 指定時や未セットアップ環境ではスキップ理由付きでSkipされる）。
+- **実行**: 高速ループは `go test -short ./internal/...`（数秒）。フル検証は `go test ./internal/... ./test/...`（統合＋E2Eで約1〜2分）。
+- **フィクスチャ**: テスト動画はGitにコミットしない。`testutil.GenerateSampleVideo` が lavfi で動的生成する（320x240/30fps/6秒=180フレーム、ハードカット60/120帧）。
+- **仕様照合**: 各アサートはmemo.md固定点に対応づけ済み（フレーム完全一致＝select区間、10-bit＝yuv420p10le、IDR先頭のみ＝キーフレーム数1、harmonic_mean>=目標、成功時tmp破棄等）。
+
 ## アーキテクチャの固定方針（memo.md 由来）
 
 - **完全ポータブル配布**: Zip解凍だけで動作。ユーザーへのランタイム導入・PATH設定要求は禁止。
 - **環境構築はGoスクリプト一発**: `go run ./cmd/engram setup`（OS/arch自動判別、FFmpeg静的ビルドのDL、Rust製 `av-scenechange` を `cargo build --release` でローカルビルド）。ローカル開発とCIで同一コマンドを使う（Dev-CI Parity）。**開発者環境にはRustツールチェーン（cargo）が必須**。
-- **依存バイナリのpin**: FFmpeg 8.1.2（gyan.dev essentials zip）と av-scenechange v0.24.1 をバージョンpinしSHA256検証する。セットアップは冪等（導入済みなら検証のみ）。
+- **依存バイナリのpin**: FFmpeg 8.1.2 full build（GyanD/codexffmpeg GitHubリリースzip・公式SHA256照合。essentialsにはlibsvtav1が無いためfullを採用）と av-scenechange v0.24.1 をバージョンpinしSHA256検証する。セットアップは冪等（導入済みなら検証のみ）で、検証にはlibvmafフィルタ＋必須エンコーダ（h264/hevc/av1-svt）の存在確認を含む。
 - **VMAF実装時の注意**（実測済み）: フィルタ名は8系で `vmaf` → `libvmaf` に改名。`vmaf_v1.0.16_3d0h` はCAMBI特徴量の関係で低解像度入力だと失敗するため、libvmaf投入前に1920x1080へのリサイズが必要（詳細はmemo.md）。
 - **外部バイナリの呼び出し**: 必ず `os.Executable()` からの相対パス（`../bin/{tool}`）。PATH参照やシステムのffmpeg呼び出しは書かない。
 - **`build/` はステージング領域**: 配布Zipと同一構造（本体 / `bin/` / `tmp/`）を生成する。配布は `build/` をそのまま圧縮するだけ。`build/tmp/` は実行時の一時チャンク・ログ置き場（自動生成・終了時破棄）。

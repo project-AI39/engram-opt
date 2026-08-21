@@ -258,6 +258,12 @@ func buildScenes(cuts []int64, frameCount int64) ([]domain.Scene, error) {
 			EndFrame:   bounds[i+1] - 1,
 		})
 	}
+	// 構築したシーンがフレームSSOTの不変条件を満たすことの最終確認
+	for _, sc := range scenes {
+		if err := sc.Validate(); err != nil {
+			return nil, fmt.Errorf("constructed invalid scene: %w", err)
+		}
+	}
 	return scenes, nil
 }
 

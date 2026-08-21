@@ -23,9 +23,11 @@
 
 ## バージョンpin（実装済み）
 
-- **FFmpeg 8.1.2**: gyan.dev の `ffmpeg-8.1.2-essentials_build.zip`（essentialsでもlibvmaf有効を確認済み）。公式 `.sha256` で検証。
+- **FFmpeg 8.1.2 full_build**: GyanD/codexffmpeg のGitHubリリースzipをpin。gyan.dev 直URLは旧パッケージが404になるため、イミュータブルなGitHubリリースURLを採用し、digestはRelease Assets APIの公式sha256と照合した。
+  - 2026-08 に essentials → full へ切替。理由: essentials には `libsvtav1` が含まれない（※libvmafフィルタ自体はessentialsにも同梱されており、切替以前からVMAF評価は動作していた）。
 - **av-scenechange v0.24.1**: codeload.github.com のタグtarballをSHA256検証後に `cargo build --release` でローカルビルド。
 - pin値（URL / SHA256）の実体は `internal/setup` に集約。更新時はここだけ直せばよい。
+- setupの `verifyTools` は libvmaf フィルタ＋必須エンコーダ（`libx264` / `libx265` / `libsvtav1`）の存在を毎回検証するため、pin差し替えによる機能欠落はセットアップ時点で検知される。
 
 ## 配置
 - `build/` ディレクトリ内に、配布用Zipと100%同一のステージング構造を自動生成。
@@ -64,7 +66,8 @@ build/
 * **`FFmpeg` (AV1 / HEVC / H.264)**
 * 用途: 各シーンのエンコード、メディア情報解析（ffprobe）、最終結合（無劣化Concat）。
 * 形式: 公式GPL静的ビルドバイナリをダウンロードして `build/bin/` に配置。
-* 対応エンコーダ: `libsvtav1` (AV1), `libx265` (HEVC), `libx264` (H.264) 等。
+* 対応エンコーダ: `libsvtav1` (AV1), `libx265` (HEVC), `libx264` (H.264)。
+  * 2026-08: AV1(SVT-AV1) 要件のため FFmpeg を gyan.dev essentials → **full_build**（GitHubリリースpin）へ切替。setupは必須エンコーダ3種の存在検証を行い、統合テストでも全コーデックの実エンコード（10-bit出力・フレーム完全一致）を検証する。
 
 
 * **FFmpeg内蔵 `vmaf_v1.0.16_3d0h.json**`
