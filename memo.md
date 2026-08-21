@@ -76,6 +76,11 @@ build/
   * フィルタ名は `vmaf` ではなく **`libvmaf`**（8系で改名済み。`vmafmotion` という別フィルタもあるので混同しないこと）。
   * `vmaf_v1.0.16_3d0h` はCAMBI特徴量を含むため、入力が小さい解像度（例: 160x120）だと `no feature 'cambi_hrs_1080_...'` エラーで失敗する。1920x1080入力では動作確認済み → 評価パイプラインでは libvmaf への投入前にリサイズ（または解像度ガード）が必要。
   * フォールバックの `vmaf_v0.6.1neg` は低解像度でも正常動作。
+  * JSONログの `pooled_metrics.vmaf` に `{min, max, mean, harmonic_mean}` が揃っている。合否判定に必要な代表値はすべてここから取れ、per-frame の `frames[]` を集計する必要はない。
+  * **時間基準（timebase）落とし穴**: チャンク側(mkv 1/1000)と元動画側(mp4 1/15360)など時間基準が違うと framesync のペアリングが丸めずれし、全く別フレーム同士を比較してスコアが壊滅する（実測: PSNR 28dB / VMAF 20点台まで低下）。対策として両入力とも `settb=1/{fpsNum},setpts={fpsDen}*N` で共通時間基準＋整数刻みPTSへ正規化する（fps は ffprobe の `r_frame_rate` から有理数のまま取得）。任意の有理数fpsで frame duration がちょうど fpsDen tick になり誤差ゼロ。
+  * framesync は `shortest=1:eof_action=endall` を指定する（デフォルトの repeatlast は最終フレームを複製しフレーム数検証を壊す）。
+  * libvmaf へ渡すログパスに Windows 絶対パス（`C:\...`）を使うとフィルタオプション区切りの `:` と衝突して失敗する → 作業ディレクトリへ相対パスで出力し `cmd.Dir` を設定する。
+  * 評価フレーム数は参照側 select 区間数とチャンク側フレーム数の一致を必ず検証する（ずれは評価崩壊の前兆のため fail-fast）。
 
 
 
@@ -208,10 +213,11 @@ type EncodeParams struct {
 
 // SearchConfig 二分探索の全体設定（既定値は固定仕様どおり）
 type SearchConfig struct {
-    MinCRF      int     // 15
-    MaxCRF      int     // 36
-    TargetScore float64 // 95.0
-    Preset      string
+	Codec       VideoCodec
+	MinCRF      int     // 15
+	MaxCRF      int     // 36
+	TargetScore float64 // 95.0
+	Preset      string
 }
 ```
 

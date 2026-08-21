@@ -18,11 +18,13 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+
+	"engram-opt/internal/toolbin"
 )
 
 // Run は依存関係の導入状態を検査し、不足・破損があれば修復する。
 func Run() error {
-	root, err := findRepoRoot()
+	root, err := toolbin.RepoRoot()
 	if err != nil {
 		return err
 	}

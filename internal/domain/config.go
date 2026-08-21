@@ -19,8 +19,16 @@ type EncodeParams struct {
 
 // SearchConfig CRF二分探索の全体設定。
 type SearchConfig struct {
+	Codec       VideoCodec
 	MinCRF      int     // 探索下限（既定15）
 	MaxCRF      int     // 探索上限（既定36）
 	TargetScore float64 // 合否目標スコア（既定95.0、harmonic_mean基準）
 	Preset      string  // 探索中の全試行で一律固定するpreset
 }
+
+// 探索パラメータの既定値（memo.md の固定仕様）。
+const (
+	DefaultMinCRF      = 15
+	DefaultMaxCRF      = 36
+	DefaultTargetScore = 95.0
+)

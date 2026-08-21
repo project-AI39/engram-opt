@@ -20,24 +20,6 @@ import (
 
 // ===== 共通ユーティリティ =====
 
-// findRepoRoot は cwd から親ディレクトリを辿り、go.mod のある場所（=リポジトリルート）を返す。
-func findRepoRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	for {
-		if fileExists(filepath.Join(dir, "go.mod")) {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("repository root not found; run from inside the repo (go.mod not found)")
-		}
-		dir = parent
-	}
-}
-
 // downloadFile は url を dest へ保存する。curl/wget等を使わず net/http で直接取得し、
 // シェル差異を排除する。進捗は20MBごとにログ出力する。
 func downloadFile(ctx context.Context, url, dest string) error {

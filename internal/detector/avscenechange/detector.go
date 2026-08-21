@@ -25,14 +25,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 
 	"engram-opt/internal/domain"
+	"engram-opt/internal/toolbin"
 )
 
 // Detector は domain.SceneDetector の実装。
@@ -46,18 +44,18 @@ func (d *Detector) Name() string { return "av-scenechange" }
 
 // Detect 動画全体を解析し、フレーム単位のシーンリストを返す。
 func (d *Detector) Detect(ctx context.Context, inputPath string) ([]domain.Scene, error) {
-	if !fileExists(inputPath) {
+	if !toolbin.FileExists(inputPath) {
 		return nil, fmt.Errorf("input file not found: %s", inputPath)
 	}
-	ffmpegPath, err := resolveBin("ffmpeg")
+	ffmpegPath, err := toolbin.Resolve("ffmpeg")
 	if err != nil {
 		return nil, err
 	}
-	ffprobePath, err := resolveBin("ffprobe")
+	ffprobePath, err := toolbin.Resolve("ffprobe")
 	if err != nil {
 		return nil, err
 	}
-	ascPath, err := resolveBin("av-scenechange")
+	ascPath, err := toolbin.Resolve("av-scenechange")
 	if err != nil {
 		return nil, err
 	}
@@ -280,63 +278,6 @@ func probeTotalFrames(ctx context.Context, ffprobePath, inputPath string) (int64
 		return -1, nil // N/A や空文字など、メタデータ無しは「不明」として扱う
 	}
 	return n, nil
-}
-
-// ===== バイナリ解決・共通ヘルパー =====
-
-// resolveBin は同梱外部バイナリのパスを解決する。
-// PATHやシステムインストール済みのffmpeg等は絶対に使わない（ポータブル配布の固定方針）。
-//
-// 探索順序:
-//  1. 配布レイアウト: 実行バイナリからの相対 ../bin/<tool>（build/<本体> + build/bin/）
-//  2. 開発レイアウト: リポジトリルート/build/bin/<tool>（go run 実行時）
-func resolveBin(name string) (string, error) {
-	name = toolName(name)
-
-	if exe, err := os.Executable(); err == nil {
-		p := filepath.Join(filepath.Dir(exe), "..", "bin", name)
-		if fileExists(p) {
-			return p, nil
-		}
-	}
-	if root, err := findRepoRoot(); err == nil {
-		p := filepath.Join(root, "build", "bin", name)
-		if fileExists(p) {
-			return p, nil
-		}
-	}
-	return "", fmt.Errorf("binary %q not found; run 'go run ./cmd/engram setup' first", name)
-}
-
-// findRepoRoot は cwd から親ディレクトリを辿り、go.mod のある場所を返す。
-func findRepoRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	for {
-		if fileExists(filepath.Join(dir, "go.mod")) {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("repository root not found (go.mod not found)")
-		}
-		dir = parent
-	}
-}
-
-// toolName はホストOSに応じた実行バイナリ名を返す（Windowsは .exe 付き）。
-func toolName(base string) string {
-	if runtime.GOOS == "windows" {
-		return base + ".exe"
-	}
-	return base
-}
-
-func fileExists(path string) bool {
-	fi, err := os.Stat(path)
-	return err == nil && fi.Mode().IsRegular()
 }
 
 // tail は文字列の末尾 maxLines 行のみを返す（エラーメッセージ用の切り詰め）。
