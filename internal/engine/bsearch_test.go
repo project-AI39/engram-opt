@@ -14,7 +14,8 @@ import (
 
 // fakeEncoder は EncodeChunk 呼び出しでマーカーファイルを作るだけの実装。
 type fakeEncoder struct {
-	calls []domain.EncodeParams
+	calls       []domain.EncodeParams
+	concatCalls [][]string // ConcatChunks に渡されたチャンクパス列の履歴
 }
 
 func (f *fakeEncoder) Name() string { return "fake-encoder" }
@@ -24,8 +25,9 @@ func (f *fakeEncoder) EncodeChunk(_ context.Context, _ string, _ domain.Scene, p
 	return os.WriteFile(outputPath, []byte("chunk"), 0o644)
 }
 
-func (f *fakeEncoder) ConcatChunks(context.Context, []string, string) error {
-	return fmt.Errorf("not implemented in fake")
+func (f *fakeEncoder) ConcatChunks(_ context.Context, chunkPaths []string, finalOutputPath string) error {
+	f.concatCalls = append(f.concatCalls, chunkPaths)
+	return os.WriteFile(finalOutputPath, []byte("concat"), 0o644)
 }
 
 var crfInName = regexp.MustCompile(`crf(\d+)\.mkv$`)

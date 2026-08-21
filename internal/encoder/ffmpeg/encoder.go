@@ -91,8 +91,15 @@ func (e *Encoder) ConcatChunks(ctx context.Context, chunkPaths []string, finalOu
 		return err
 	}
 
-	// リストファイルは結合先と同じディレクトリに置き、相対参照で安全に扱う
-	listPath := filepath.Join(filepath.Dir(finalOutputPath), "concat_list.txt")
+	// リストファイルはユーザーの出力先を汚さないよう一時ディレクトリへ出す。
+	// -safe 0 により絶対パス参照を許可している。
+	tmpDir, err := os.MkdirTemp("", "engram-concat-")
+	if err != nil {
+		return fmt.Errorf("creating concat temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	listPath := filepath.Join(tmpDir, "list.txt")
 	var b strings.Builder
 	for _, p := range chunkPaths {
 		b.WriteString(fmt.Sprintf("file '%s'\n", concatEscape(p)))
@@ -101,12 +108,10 @@ func (e *Encoder) ConcatChunks(ctx context.Context, chunkPaths []string, finalOu
 		return fmt.Errorf("writing concat list: %w", err)
 	}
 
-	workDir := filepath.Dir(finalOutputPath)
 	cmd := exec.CommandContext(ctx, ffmpegPath,
 		"-hide_banner", "-nostdin", "-loglevel", "error", "-y",
-		"-f", "concat", "-safe", "0", "-i", filepath.Base(listPath),
+		"-f", "concat", "-safe", "0", "-i", listPath,
 		"-c", "copy", finalOutputPath)
-	cmd.Dir = workDir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("concat failed: %w\n%s", err, tail(string(out), 20))
 	}
