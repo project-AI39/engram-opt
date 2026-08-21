@@ -20,6 +20,7 @@ VMAF v1 evaluation, and CRF bisection to hit a target quality score.`,
 		},
 	}
 	root.AddCommand(newSetupCmd())
+	root.AddCommand(newOptimizeCmd())
 	return root
 }
 

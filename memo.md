@@ -52,7 +52,13 @@ build/
 * **`av-scenechange`**
 * 用途: 高精度・高速なシーン境界検出（Per-Shot分割）。
 * 形式: Rustソースから単一バイナリとしてビルドし `build/bin/` に配置。
-* 特徴: 動き補償（Motion Compensation）付き検出、JSON形式でのフレーム境界出力。
+* 特徴: 動き補償（Motion Compensation）付き検出。
+* 実測（v0.24.1）:
+  * 入力に `-` を渡すと stdin から Y4M を読む（FFmpeg stdout をパイプ直結できる）。
+  * `--json` フラグは存在しない。デフォルトで stdout へ JSON 出力: `{"scene_changes":[0,120],"scores":{...},"frame_count":180,"speed":...}`
+  * `scene_changes` はカット点リスト（先頭必ず0、終端は含まない）。シーン区間は半開区間 `[ci, c(i+1))`、最終終端は `frame_count`。domain の inclusive EndFrame への変換は `EndFrame = 次開始-1`。
+  * `scores` は全フレーム分の内訳で巨大になるため、Go側パーサは streaming デコーダで `scene_changes` / `frame_count` のみ抽出し `scores` は読み飛ばす（実装: `internal/detector/avscenechange`）。
+  * 合成クリップ（無音フラット色）では一部カットを見逃すことがあるが、実写・実動画コンテンツ向けのツールのため問題なし（2026-08 実測）。
 
 
 * **`FFmpeg` (AV1 / HEVC / H.264)**

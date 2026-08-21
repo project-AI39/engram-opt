@@ -2,7 +2,7 @@
 
 ## 現状
 
-- 依存関係の自動セットアップ（`go run ./cmd/engram setup`、実体は `internal/setup`）とcobra CLI骨格（`cmd/engram` ＋ `internal/cli`）は実装完了・Windows amd64で動作確認済み。TUI・CI・テストは未実装で、次ステップはPhase 2（domain型定義＋detector、シーン分割JSON出力まで）。開発フェーズは memo.md「モジュール構成（実装方針）」を参照。
+- 依存関係の自動セットアップとcobra CLI骨格に加え、Phase 2（domain型定義＋av-scenechange detector、`optimize` コマンドでシーン分割JSON出力）まで実装完了・動作確認済み。次ステップはPhase 3（encoder／evaluator実装 → 単一シーン二分探索）。開発フェーズは memo.md「モジュール構成（実装方針）」を参照。
 - 先行導入済みライブラリ: `cobra`（本体CLI用）／`bubbletea`・`lipgloss`・`bubbles`（TUIダッシュボード用・未使用）／`charmbracelet/log`（採用未決）。未使用のまま消えないよう `tools/tools.go` アンカーで固定済み（使い始めたら対応する `_ import` を削除）。
 - 設計の唯一の情報源は `memo.md`。作業前に必ず読むこと。
 - 構想: Go製の動画最適化CLI（シーン分割 → エンコード → VMAF v1評価 → CRF二分探索のPer-Shot最適化）＋TUIダッシュボード。1日単位の無人動作を想定。
