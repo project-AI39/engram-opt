@@ -3,6 +3,7 @@
 ## 現状
 
 - 依存関係の自動セットアップ（`cmd/setup/main.go`）は実装完了・Windows amd64で動作確認済み。本体CLI・TUI・CI・テストは未実装で、次ステップは本体CLI（動画入力 → シーン分割）。
+- 先行導入済みライブラリ: `cobra`（本体CLI用）／`bubbletea`・`lipgloss`・`bubbles`（TUIダッシュボード用・未使用）／`charmbracelet/log`（採用未決）。未使用のまま消えないよう `tools/tools.go` アンカーで固定済み（使い始めたら対応する `_ import` を削除）。
 - 設計の唯一の情報源は `memo.md`。作業前に必ず読むこと。
 - 構想: Go製の動画最適化CLI（シーン分割 → エンコード → VMAF v1評価 → CRF二分探索のPer-Shot最適化）＋TUIダッシュボード。1日単位の無人動作を想定。
 
