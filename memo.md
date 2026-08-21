@@ -113,3 +113,141 @@ build/
 - **メモリパイプによるディスクI/O・容量爆発の防止**
   - 4K等の非圧縮映像（Y4M）を一時ファイルとしてディスクに書き出すと数十〜数百GBの容量を消費するため、ディスク保存は禁止。
   - 生データを要求するツール（`av-scenechange` 等）には、FFmpegの標準出力を RAM 上のパイプ（`os/exec` の `StdoutPipe` / `Stdin`）で直結してメモリ上で処理を完結させる。
+
+# モジュール構成（実装方針）
+
+## ディレクトリ構成
+
+将来拡張用の空モジュールは作らない（YAGNI）。TUI（`ui/`）はTUIフェーズ開始時に追加する。
+
+```text
+cmd/
+  └── engram/
+       └── main.go                # 薄いmainのみ。ロジックは書かない
+internal/
+  ├── cli/                        # cobra コマンド定義
+  │    ├── root.go
+  │    ├── setup.go               # 既存 cmd/setup/main.go のロジック移管先
+  │    └── optimize.go            # 本体パイプライン（engine呼び出し）
+  ├── domain/                     # 共通の型・インターフェース（依存の錨）
+  │    ├── scene.go               # シーン境界情報
+  │    ├── metrics.go             # 画質評価結果
+  │    ├── config.go              # EncodeParams / SearchConfig
+  │    └── interfaces.go          # SceneDetector / VideoEncoder / QualityEvaluator
+  ├── detector/
+  │    └── avscenechange/         # Y4Mパイプ処理・ffprobeでの総フレーム数取得も内包
+  ├── encoder/
+  │    └── ffmpeg/                # フレーム完全一致のチャンク抽出・codec別preset解決も内包
+  ├── evaluator/
+  │    └── libvmaf/               # libvmaf投入前の1080pリサイズも内包
+  └── engine/
+       ├── bsearch.go             # 単一シーンのCRF二分探索
+       └── orchestrator.go        # 全体フロー制御の司令塔＋build/tmp管理
+```
+
+- 既存 `cmd/setup/main.go` はPhase 1で `internal/cli` へ移管後、削除する。
+
+## 共通データ契約（domain）
+
+### シーン境界（scene.go）
+
+浮動小数点を排除し、`int64` フレーム番号のみを唯一の真実（SSOT）とする。
+
+```go
+type Scene struct {
+    Index      int   `json:"index"`
+    StartFrame int64 `json:"start_frame"` // 0-indexed
+    EndFrame   int64 `json:"end_frame"`   // inclusive
+}
+
+func (s Scene) FrameCount() int64 { return s.EndFrame - s.StartFrame + 1 }
+```
+
+### 画質評価結果（metrics.go）
+
+合否判定は `harmonic_mean` のみで行う（`mean` / `min` は参考記録値）。
+
+```go
+type QualityMetrics struct {
+    HarmonicMean float64 `json:"harmonic_mean"` // 合否判定用代表値
+    Mean         float64 `json:"mean"`
+    Min          float64 `json:"min"`
+}
+
+func (q QualityMetrics) TargetMet(target float64) bool { return q.HarmonicMean >= target }
+```
+
+### 設定（config.go）
+
+- `Preset` は `string` 型とする。x264/x265は `"medium"` 等の文字列、SVT-AV1は数値のため、実際のエンコーダ引数への解決は `encoder/ffmpeg` 内部で行う。
+- 二分探索の探索範囲等は試行パラメータ（`EncodeParams`）と分離し `SearchConfig` に持つ。
+
+```go
+type VideoCodec string
+
+const (
+    CodecAV1  VideoCodec = "av1"
+    CodecHEVC VideoCodec = "hevc"
+    CodecH264 VideoCodec = "h264"
+)
+
+// EncodeParams 単一試行のパラメータ
+type EncodeParams struct {
+    Codec    VideoCodec
+    CRF      int    // 試行するCRF値
+    Preset   string // 全試行で一律固定
+    BitDepth int    // 10固定（yuv420p10le）
+}
+
+// SearchConfig 二分探索の全体設定（既定値は固定仕様どおり）
+type SearchConfig struct {
+    MinCRF      int     // 15
+    MaxCRF      int     // 36
+    TargetScore float64 // 95.0
+    Preset      string
+}
+```
+
+### インターフェース（interfaces.go）
+
+総フレーム数はdetector内部でffprobeにより取得するため、`Detect` の引数から外す（呼び出し側のffprobe依存をなくす）。
+
+```go
+type SceneDetector interface {
+    Name() string
+    // 動画全体を解析し、フレーム単位のシーンリストを返す
+    Detect(ctx context.Context, inputPath string) ([]Scene, error)
+}
+
+type VideoEncoder interface {
+    Name() string
+    // 元動画の指定シーン区間を指定パラメータでエンコードする
+    EncodeChunk(ctx context.Context, inputPath string, scene Scene, params EncodeParams, outputPath string) error
+    // 確定した全チャンクを無劣化結合（concat demuxer + -c copy）する
+    ConcatChunks(ctx context.Context, chunkPaths []string, finalOutputPath string) error
+}
+
+type QualityEvaluator interface {
+    Name() string
+    // 元動画の該当区間とエンコード済みチャンクを比較評価する
+    Evaluate(ctx context.Context, originalPath string, scene Scene, encodedChunkPath string) (QualityMetrics, error)
+}
+```
+
+## エンジン設計
+
+- `orchestrator.go` は全体フロー制御の司令塔: 検出 → 各シーンの二分探索 → 結合。処理は当初 **逐次**（シーン並列化は明示的にスコープ外、必要になってから検討）。
+- 一時ファイルは `build/tmp/<job-id>/` に隔離し、終了時に破棄する（`build/` は配布Zipと同一構造のステージング領域という規約に従う）。
+- **進捗通知は疎結合**: engineがログやTUIに直接依存するとテスト不能になるため、コールバック注入方式とする（例: `ProgressFn func(SceneEvent)`）。CLI実装ではログへ、TUI実装ではbubbleteaモデル更新へ変換する。engineは `ui/` をimportしない。
+
+## ログ方針
+
+- 当面はstdlib `log` のまま進める。無人実行のログはファイル出力前提のため、構造化ロギング（`log/slog`）への移行も含めてTUIフェーズ開始時に再検討する。
+
+## 開発フェーズ
+
+1. **Phase 1**: cobra再編（`cmd/engram` 化 ＋ setup移管・旧削除）
+2. **Phase 2**: domain型定義 ＋ detector実装（シーン分割JSON出力まで動く）
+3. **Phase 3**: encoder / evaluator実装 → 単一シーンで二分探索が通る
+4. **Phase 4**: orchestrator統合（全シーン逐次処理）
+5. **Phase 5**: TUIダッシュボード（`ui/` 追加、ログ方針の再検討もここ）
