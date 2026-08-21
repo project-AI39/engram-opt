@@ -14,18 +14,18 @@
 # 自動環境構築
 
 ## 仕組み
-- Go言語製のセットアップスクリプト（`cmd/setup/main.go`）を使用し、実行環境のOS（Windows / macOS / Linux）およびアーキテクチャ（amd64 / arm64）を自動判別。
+- Go言語製のセットアップコマンド（本体CLI `cmd/engram` の `setup` サブコマンド、実体は `internal/setup`）を使用し、実行環境のOS（Windows / macOS / Linux）およびアーキテクチャ（amd64 / arm64）を自動判別。
 - シェルを経由しないクロスプラットフォーム構築を実現。ダウンロード・外部コマンド実行はGo標準ライブラリ（`net/http`, `os/exec`）で直接実行し、アーカイブ展開のみ純Goライブラリ [`mholt/archives`](https://github.com/mholt/archives) を使用（旧archiverのメンテされる後継。標準ライブラリ非対応の xz / 7z も展開可能）：
   1. 各OS向けFFmpeg静的ビルドバイナリの自動ダウンロード＆展開
   2. Rust製ツール（`av-scenechange`）のローカルコンパイル（`cargo build --release`）
   3. パーミッション設定（Unix系: `0755`）および拡張子制御（Windows: `.exe`）
-- ローカル開発環境とCI/CD（GitHub Actions）で同一の `go run ./cmd/setup/main.go` を実行し、環境差異（Dev-CI Parity）を完全に排除。
+- ローカル開発環境とCI/CD（GitHub Actions）で同一の `go run ./cmd/engram setup` を実行し、環境差異（Dev-CI Parity）を完全に排除。
 
 ## バージョンpin（実装済み）
 
 - **FFmpeg 8.1.2**: gyan.dev の `ffmpeg-8.1.2-essentials_build.zip`（essentialsでもlibvmaf有効を確認済み）。公式 `.sha256` で検証。
 - **av-scenechange v0.24.1**: codeload.github.com のタグtarballをSHA256検証後に `cargo build --release` でローカルビルド。
-- pin値（URL / SHA256）の実体は `cmd/setup/main.go` に集約。更新時はここだけ直せばよい。
+- pin値（URL / SHA256）の実体は `internal/setup` に集約。更新時はここだけ直せばよい。
 
 ## 配置
 - `build/` ディレクトリ内に、配布用Zipと100%同一のステージング構造を自動生成。
@@ -125,10 +125,11 @@ cmd/
   └── engram/
        └── main.go                # 薄いmainのみ。ロジックは書かない
 internal/
-  ├── cli/                        # cobra コマンド定義
+  ├── cli/                        # cobra コマンド定義（引数解析と委譲のみ）
   │    ├── root.go
-  │    ├── setup.go               # 既存 cmd/setup/main.go のロジック移管先
+  │    ├── setup.go               # setupサブコマンド定義（処理本体は internal/setup へ委譲）
   │    └── optimize.go            # 本体パイプライン（engine呼び出し）
+  ├── setup/                      # 依存関係セットアップ本体（FFmpeg DL・cargo build・検証）
   ├── domain/                     # 共通の型・インターフェース（依存の錨）
   │    ├── scene.go               # シーン境界情報
   │    ├── metrics.go             # 画質評価結果
@@ -145,7 +146,7 @@ internal/
        └── orchestrator.go        # 全体フロー制御の司令塔＋build/tmp管理
 ```
 
-- 既存 `cmd/setup/main.go` はPhase 1で `internal/cli` へ移管後、削除する。
+- 既存のスタンドアロンsetupコマンドはPhase 1でcobra配下へ移管済み（`go run ./cmd/engram setup`）。
 
 ## 共通データ契約（domain）
 

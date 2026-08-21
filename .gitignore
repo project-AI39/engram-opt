@@ -2,4 +2,4 @@
 build/
 
 # go build ./... の生成物がルートに出ることがあるため除外
-/setup.exe
+/*.exe
