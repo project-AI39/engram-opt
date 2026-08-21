@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -17,14 +19,17 @@ import (
 	"engram-opt/internal/engine"
 	"engram-opt/internal/evaluator/libvmaf"
 	"engram-opt/internal/toolbin"
+	"engram-opt/internal/ui"
 )
 
 func newOptimizeCmd() *cobra.Command {
 	var (
-		output string
-		shot   int
-		codec  string
-		preset string
+		output  string
+		shot    int
+		codec   string
+		preset  string
+		tui     bool
+		logFile string
 	)
 
 	cmd := &cobra.Command{
@@ -48,6 +53,20 @@ Use --shot N for a debug run of a single scene's CRF search
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			input := args[0]
+
+			// --log-file: 無人実行向けにログをファイルへも二重化する
+			var logSink io.Writer // --tui 時は ui.Options.LogMirror に渡し、表示中も二重化を維持する
+			if logFile != "" {
+				f, lerr := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+				if lerr != nil {
+					return fmt.Errorf("opening log file: %w", lerr)
+				}
+				defer f.Close()
+				logSink = f
+				prev := log.Writer()
+				log.SetOutput(io.MultiWriter(prev, f))
+				defer log.SetOutput(prev)
+			}
 
 			root, err := toolbin.RepoRoot()
 			if err != nil {
@@ -79,28 +98,52 @@ Use --shot N for a debug run of a single scene's CRF search
 				Encoder:   ffenc.New(),
 				Evaluator: libvmaf.New(),
 			}
-			report, err := orch.Run(ctx, input, outPath, jobDir, cfg, engine.ProgressCallbacks{
-				OnDetectionDone: func(scenes []domain.Scene) {
-					log.Printf("[optimize] detected %d scene(s)", len(scenes))
-				},
-				OnSceneStart: func(i, total int) {
-					log.Printf("[optimize] shot %d/%d start", i+1, total)
-				},
-				OnTrial: func(tr engine.Trial) {
-					status := "MISS"
-					if tr.MetTarget {
-						status = "HIT "
-					}
-					log.Printf("[optimize] shot %d trial crf=%2d harmonic_mean=%6.2f min=%6.2f [%s]",
-						tr.Scene.Index, tr.CRF, tr.Metrics.HarmonicMean, tr.Metrics.Min, status)
-				},
-				OnSceneDone: func(i, _ int, r *engine.Result) {
-					log.Printf("[optimize] shot %d done: crf=%d met=%v trials=%d",
-						i, r.CRF, r.MetTarget, r.Trials)
-				},
-			})
-			if err != nil {
-				return err
+
+			// TUIモード。端末がなければ平文ログへフォールバックする。
+			var report *engine.PipelineReport
+			if tui {
+				rep, uerr := ui.Run(ctx, orch, input, outPath, jobDir, cfg, ui.Options{
+					InputPath:  input,
+					OutputPath: outPath,
+					Codec:      cfg.Codec,
+					Preset:     preset,
+					Target:     cfg.TargetScore,
+					LogMirror:  logSink,
+				})
+				switch {
+				case uerr == nil:
+					report = rep
+				case errors.Is(uerr, ui.ErrNoTTY):
+					log.Printf("[optimize] %v; falling back to plain logs", uerr)
+				default:
+					return uerr
+				}
+			}
+			if report == nil {
+				rep, perr := orch.Run(ctx, input, outPath, jobDir, cfg, engine.ProgressCallbacks{
+					OnDetectionDone: func(scenes []domain.Scene) {
+						log.Printf("[optimize] detected %d scene(s)", len(scenes))
+					},
+					OnSceneStart: func(i, total int) {
+						log.Printf("[optimize] shot %d/%d start", i+1, total)
+					},
+					OnTrial: func(tr engine.Trial) {
+						status := "MISS"
+						if tr.MetTarget {
+							status = "HIT "
+						}
+						log.Printf("[optimize] shot %d trial crf=%2d harmonic_mean=%6.2f min=%6.2f [%s]",
+							tr.Scene.Index, tr.CRF, tr.Metrics.HarmonicMean, tr.Metrics.Min, status)
+					},
+					OnSceneDone: func(i, _ int, r *engine.Result) {
+						log.Printf("[optimize] shot %d done: crf=%d met=%v trials=%d",
+							i, r.CRF, r.MetTarget, r.Trials)
+					},
+				})
+				if perr != nil {
+					return perr
+				}
+				report = rep
 			}
 			printSummary(input, report)
 			return nil
@@ -110,6 +153,8 @@ Use --shot N for a debug run of a single scene's CRF search
 	cmd.Flags().IntVar(&shot, "shot", -1, "debug: run CRF search on this scene index only")
 	cmd.Flags().StringVar(&codec, "codec", string(domain.CodecH264), "encode codec: h264 | hevc | av1")
 	cmd.Flags().StringVar(&preset, "preset", "medium", "encoder preset (identical across all trials)")
+	cmd.Flags().BoolVar(&tui, "tui", false, "show interactive dashboard (falls back to plain logs when stdout is not a terminal)")
+	cmd.Flags().StringVar(&logFile, "log-file", "", "append log output to this file (for unattended runs)")
 	return cmd
 }
 

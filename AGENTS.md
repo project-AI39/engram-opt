@@ -2,8 +2,8 @@
 
 ## 現状
 
-- 依存関係の自動セットアップ、cobra CLI骨格、Phase 2（domain＋detector）、Phase 3（encoder／evaluator／engine.bsearch）、Phase 4（engine.orchestrator統合： 全シーン逐次処理→無劣化concat、`optimize` コマンドで完成動画出力）まで実装完了・動作確認済み。次ステップはPhase 5（TUIダッシュボード、ログ方針の再検討もここ）。開発フェーズは memo.md「モジュール構成（実装方針）」を参照。libvmaf評価の時間基準落とし穴など実測知見は memo.md「依存ツール」節に記録済み。
-- 先行導入済みライブラリ: `cobra`（本体CLI用・使用中）／`bubbletea`・`lipgloss`・`bubbles`（TUIダッシュボード用・未使用）／`charmbracelet/log`（採用未決）。未使用のまま消えないよう `tools/tools.go` アンカーで固定済み（使い始めたら対応する `_ import` を削除）。
+- 依存関係の自動セットアップ、cobra CLI骨格、Phase 2〜4（domain／detector／encoder／evaluator／engine.bsearch／orchestrator統合）、Phase 5（bubbletea TUIダッシュボード＋ログ方針確定）まで **全フェーズ実装完了・動作確認済み**。コア機能は完成。次ステップ候補は配布物整備（README/LICENSE/THIRD-PARTY-NOTICES、ビルドスクリプト、CI）と実動画での長時間検証。開発フェーズは memo.md「モジュール構成（実装方針）」、実測知見は memo.md「依存ツール」節を参照。
+- 導入済みライブラリはすべて使用中: `cobra`（CLI）／`bubbletea`・`lipgloss`・`bubbles`（TUIダッシュボード `internal/ui/`）。先行導入用アンカー `tools/tools.go` は役目を終えて削除済み（`charmbracelet/log` は依存ごと除去）。
 - 設計の唯一の情報源は `memo.md`。作業前に必ず読むこと。
 - 構想: Go製の動画最適化CLI（シーン分割 → エンコード → VMAF v1評価 → CRF二分探索のPer-Shot最適化）＋TUIダッシュボード。1日単位の無人動作を想定。
 
