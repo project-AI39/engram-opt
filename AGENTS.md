@@ -13,7 +13,7 @@
 - **ガード**: 統合/E2Eは冒頭で `testutil.RequireBinaries(t, ...)` を呼ぶ（`-short` 指定時や未セットアップ環境ではスキップ理由付きでSkipされる）。
 - **実行**: 高速ループは `go test -short ./internal/...`（数秒）。フル検証は `go test ./internal/... ./test/...`（統合＋E2Eで約1〜2分）。
 - **フィクスチャ**: テスト動画はGitにコミットしない。`testutil.GenerateSampleVideo` が lavfi で動的生成する（320x240/30fps/6秒=180フレーム、ハードカット60/120フレーム目）。
-- **仕様照合**: 各アサートはmemo.md固定点に対応づけ済み（フレーム完全一致＝select区間、10-bit＝yuv420p10le、IDR先頭のみ＝キーフレーム数1、harmonic_mean>=目標、成功時tmp破棄等）。
+- **仕様照合**: 各アサートはmemo.md固定点に対応づけ済み（フレーム完全一致＝select区間、10-bit＝yuv420p10le、チャンク先頭IDR＝FirstFrameIsKey、harmonic_mean>=目標、成功時tmp破棄等）。
 
 ## アーキテクチャの固定方針（memo.md 由来）
 
@@ -29,6 +29,6 @@
 - 探索パラメータは**整数CRFのみ**（既定 15〜36、単調性前提の二分探索。Phase 8からウィザードで変更可、検証は `SearchConfig.Validate()` に一元）。Preset/Speed は全試行で一律固定。
 - **音声はシーン分割の対象外**: 完成映像への最終ミックスで1回だけ処理する（`--audio copy` 既定=無劣化copy、opus/aacはチャンネル数から自動ビットレート、none=破棄）。実装は `domain.AudioMuxer`＋orchestratorのオプション依存 `Muxer`。
 - 入力が8-bitでも出力は既定 `-pix_fmt yuv420p10le`（10-bit。バンディング防止とサイズ削減のため）。Phase 8から8-bit（yuv420p）も選択可能（encoderは `EncodeParams.BitDepth` を参照）。
-- チャンク分割はシーン単位。IDRキーフレームは各チャンク先頭のみ。
+- チャンク分割はシーン単位。チャンク先頭は必ずIDR（copy結合とシークの前提）。**先頭以降の適応的キーフレームはエンコーダー判断に委ねる**（scenecut抑止は廃止。配置はCRF非依存のため二分探索と両立、詳細はmemo.md「GOP / キーフレーム設定」）。
 - VMAF: FFmpeg内蔵 `vmaf_v1.0.16_3d0h.json` を使用（外部モデルファイル管理不要）。フォールバックは `vmaf_v0.6.1neg`。
 - 合否判定: シーンごとの `harmonic_mean >= targetScore`（既定 95.0）を満たす最大CRFを採用。`mean` や `min` は使わない。
