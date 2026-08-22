@@ -245,3 +245,32 @@ func TestOrchestratorWarnsWhenOverwritingOutput(t *testing.T) {
 		t.Fatalf("warning should include the target path:\n%s", buf.String())
 	}
 }
+
+// 単一シーン（カット無し動画）でも結合〜確定まで完走する。
+// av-scenechangeはカット無しでも scene_changes=[0] を返すため、実運用では
+// むしろ多数派となる入力。2シーン前提のテストしか無い状態を埋めた。
+func TestOrchestratorRunSingleScene(t *testing.T) {
+	workDir := filepath.Join(t.TempDir(), "job")
+	output := filepath.Join(t.TempDir(), "out", "final.mkv")
+	if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	orch := &Orchestrator{
+		Detector:  &fakeDetector{scenes: []domain.Scene{{Index: 0, StartFrame: 0, EndFrame: 99}}},
+		Encoder:   &fakeEncoder{},
+		Evaluator: &fakeEvaluator{scoreAt: func(int) float64 { return 100 }},
+	}
+	cfg := domain.SearchConfig{Codec: domain.CodecH264, MinCRF: 15, MaxCRF: 36, TargetScore: 90, Preset: "medium"}
+
+	rep, err := orch.Run(context.Background(), "in.mp4", output, workDir, cfg, ProgressCallbacks{})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(rep.Results) != 1 {
+		t.Fatalf("results = %d scenes, want 1", len(rep.Results))
+	}
+	if _, err := os.Stat(output); err != nil {
+		t.Fatalf("finalized output missing: %v", err)
+	}
+}
