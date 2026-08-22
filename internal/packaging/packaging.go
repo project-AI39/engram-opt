@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"time"
 
+	"engram-opt/internal/devcheck"
 	"engram-opt/internal/toolbin"
 )
 
@@ -43,6 +44,13 @@ func Run(root string, opt Options) (string, error) {
 	}
 	buildDir := filepath.Join(root, "build")
 	binDir := filepath.Join(buildDir, "bin")
+
+	// 0) 開発品質ゲート: 整形漏れ・静的解析違反は配布物を作らせない（fail-fast）。
+	//    「ビルドしたら問題も一緒に見つかる」を保証する正規のフックポイント。
+	opt.logf("[package] dev checks (gofmt / go vet) ...")
+	if err := devcheck.Run(root, opt.logf); err != nil {
+		return "", fmt.Errorf("dev checks: %w", err)
+	}
 
 	// 1) 同梱バイナリの事前確認（setup未実行ならここで明確に失敗させる）
 	for _, tool := range []string{"ffmpeg", "ffprobe", "av-scenechange"} {
