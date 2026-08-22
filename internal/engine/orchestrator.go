@@ -71,6 +71,16 @@ func (o *Orchestrator) Run(ctx context.Context, inputPath, outputPath, workDir s
 func (o *Orchestrator) run(ctx context.Context, inputPath, outputPath, workDir string, cfg domain.SearchConfig, cb ProgressCallbacks) (*PipelineReport, error) {
 	if o.Detector == nil || o.Encoder == nil || o.Evaluator == nil {
 		return nil, fmt.Errorf("orchestrator requires detector, encoder and evaluator")
+
+	}
+	// 相対パスの正規化: 子プロセスの中には実行ディレクトリを変えるものがある
+	// （libvmaf評価は cmd.Dir=評価作業領域で起動し log_path を相対指定する）。
+	// その場合でも入出力が壊れないよう、engine境界で絶対パスへ統一する。
+	if abs, err := filepath.Abs(inputPath); err == nil {
+		inputPath = abs
+	}
+	if abs, err := filepath.Abs(outputPath); err == nil {
+		outputPath = abs
 	}
 	// 元動画保護の唯一の防壁: 出力が入力と同一パスなら fail-fast する。
 	// 結合は concat demuxer（list.txt）経由のため ffmpeg 自己保護が発火せず、

@@ -1,0 +1,238 @@
+2026/08/23 05:42:45 [optimize] audio mode: copy
+2026/08/23 05:42:54 [detector] av-scenechange finished: 26 cut point(s), 2160 frame(s)
+2026/08/23 05:42:54 [pipeline] detected 26 scene(s)
+2026/08/23 05:42:54 [optimize] detected 26 scene(s)
+2026/08/23 05:42:54 [optimize] shot 1/26 start
+2026/08/23 05:42:55 [vmaf] WARNING: primary model failed (libvmaf run failed (version=vmaf_v1.0.16_3d0h): exit status 0xfffffffe
+[in#1 @ 000001eaffcfeb00] Error opening input: No such file or directory
+Error opening input file test.webm.
+Error opening input files: No such file or directory); falling back to version=vmaf_v0.6.1neg. Scores are model-specific and may not be comparable with other shots.
+2026/08/23 05:42:55 [vmaf] kept report for inspection: D:\mycode\engram-opt\build\tmp\20260823-054245-p21972\shot0000\vmaf-3983856668\vmaf_report.json
+2026/08/23 05:42:55 [pipeline] failed; temp kept for inspection: D:\mycode\engram-opt\build\tmp\20260823-054245-p21972
+2026/08/23 05:55:30 [optimize] audio mode: copy
+2026/08/23 05:55:38 [detector] av-scenechange finished: 26 cut point(s), 2160 frame(s)
+2026/08/23 05:55:38 [pipeline] detected 26 scene(s)
+2026/08/23 05:55:38 [optimize] detected 26 scene(s)
+2026/08/23 05:55:38 [optimize] shot 1/26 start
+2026/08/23 05:55:45 [optimize] shot 0 trial crf=36 harmonic= 77.97 (min= 75.94) [MISS]
+2026/08/23 05:55:52 [optimize] shot 0 trial crf=15 harmonic= 93.28 (min= 92.39) [MISS]
+2026/08/23 05:55:52 [engine] scene 0: target 95.00 unreachable even at CRF 15 (harmonic=93.28); adopting minimum CRF
+2026/08/23 05:55:52 [optimize] shot 0 done: crf=15 met=false trials=2
+2026/08/23 05:55:52 [optimize] shot 2/26 start
+2026/08/23 05:56:13 [optimize] shot 1 trial crf=36 harmonic= 74.10 (min= 65.13) [MISS]
+2026/08/23 05:56:37 [optimize] shot 1 trial crf=15 harmonic= 97.21 (min= 88.15) [HIT ]
+2026/08/23 05:56:59 [optimize] shot 1 trial crf=25 harmonic= 92.11 (min= 84.30) [MISS]
+2026/08/23 05:57:21 [optimize] shot 1 trial crf=20 harmonic= 95.40 (min= 86.90) [HIT ]
+2026/08/23 05:57:44 [optimize] shot 1 trial crf=22 harmonic= 94.34 (min= 86.00) [MISS]
+2026/08/23 05:58:07 [optimize] shot 1 trial crf=21 harmonic= 94.91 (min= 86.75) [MISS]
+2026/08/23 05:58:07 [optimize] shot 1 done: crf=20 met=true trials=6
+2026/08/23 05:58:07 [optimize] shot 3/26 start
+2026/08/23 05:58:12 [optimize] shot 2 trial crf=36 harmonic= 83.70 (min= 72.22) [MISS]
+2026/08/23 05:58:17 [optimize] shot 2 trial crf=15 harmonic= 98.83 (min= 96.03) [HIT ]
+2026/08/23 05:58:23 [optimize] shot 2 trial crf=25 harmonic= 95.19 (min= 91.70) [HIT ]
+2026/08/23 05:58:28 [optimize] shot 2 trial crf=30 harmonic= 90.20 (min= 85.81) [MISS]
+2026/08/23 05:58:34 [optimize] shot 2 trial crf=27 harmonic= 93.50 (min= 89.42) [MISS]
+2026/08/23 05:58:40 [optimize] shot 2 trial crf=26 harmonic= 94.22 (min= 90.43) [MISS]
+2026/08/23 05:58:40 [optimize] shot 2 done: crf=25 met=true trials=6
+2026/08/23 05:58:40 [optimize] shot 4/26 start
+2026/08/23 05:58:54 [optimize] shot 3 trial crf=36 harmonic= 84.89 (min= 74.68) [MISS]
+2026/08/23 05:59:11 [optimize] shot 3 trial crf=15 harmonic= 99.90 (min= 98.93) [HIT ]
+2026/08/23 05:59:27 [optimize] shot 3 trial crf=25 harmonic= 97.48 (min= 94.33) [HIT ]
+2026/08/23 05:59:42 [optimize] shot 3 trial crf=30 harmonic= 93.62 (min= 86.39) [MISS]
+2026/08/23 05:59:58 [optimize] shot 3 trial crf=27 harmonic= 96.27 (min= 91.11) [HIT ]
+2026/08/23 06:00:13 [optimize] shot 3 trial crf=28 harmonic= 95.46 (min= 89.33) [HIT ]
+2026/08/23 06:00:30 [optimize] shot 3 trial crf=29 harmonic= 94.62 (min= 87.93) [MISS]
+2026/08/23 06:00:30 [optimize] shot 3 done: crf=28 met=true trials=7
+2026/08/23 06:00:30 [optimize] shot 5/26 start
+2026/08/23 06:00:37 [optimize] shot 4 trial crf=36 harmonic= 85.26 (min= 73.51) [MISS]
+2026/08/23 06:00:44 [optimize] shot 4 trial crf=15 harmonic=100.00 (min=100.00) [HIT ]
+2026/08/23 06:00:51 [optimize] shot 4 trial crf=25 harmonic= 99.58 (min= 93.21) [HIT ]
+2026/08/23 06:00:58 [optimize] shot 4 trial crf=30 harmonic= 96.65 (min= 86.19) [HIT ]
+2026/08/23 06:01:04 [optimize] shot 4 trial crf=33 harmonic= 91.66 (min= 80.35) [MISS]
+2026/08/23 06:01:11 [optimize] shot 4 trial crf=31 harmonic= 95.16 (min= 85.04) [HIT ]
+2026/08/23 06:01:17 [optimize] shot 4 trial crf=32 harmonic= 93.56 (min= 82.40) [MISS]
+2026/08/23 06:01:17 [optimize] shot 4 done: crf=31 met=true trials=7
+2026/08/23 06:01:17 [optimize] shot 6/26 start
+2026/08/23 06:01:47 [optimize] shot 5 trial crf=36 harmonic= 74.30 (min= 64.52) [MISS]
+2026/08/23 06:02:21 [optimize] shot 5 trial crf=15 harmonic= 96.55 (min= 87.45) [HIT ]
+2026/08/23 06:02:54 [optimize] shot 5 trial crf=25 harmonic= 91.51 (min= 81.96) [MISS]
+2026/08/23 06:03:28 [optimize] shot 5 trial crf=20 harmonic= 94.81 (min= 85.43) [MISS]
+2026/08/23 06:04:02 [optimize] shot 5 trial crf=17 harmonic= 95.98 (min= 87.12) [HIT ]
+2026/08/23 06:04:36 [optimize] shot 5 trial crf=18 harmonic= 95.63 (min= 86.70) [HIT ]
+2026/08/23 06:05:10 [optimize] shot 5 trial crf=19 harmonic= 95.22 (min= 85.75) [HIT ]
+2026/08/23 06:05:10 [optimize] shot 5 done: crf=19 met=true trials=7
+2026/08/23 06:05:10 [optimize] shot 7/26 start
+2026/08/23 06:05:18 [optimize] shot 6 trial crf=36 harmonic= 73.20 (min= 65.64) [MISS]
+2026/08/23 06:05:27 [optimize] shot 6 trial crf=15 harmonic= 97.64 (min= 95.87) [HIT ]
+2026/08/23 06:05:35 [optimize] shot 6 trial crf=25 harmonic= 92.06 (min= 87.84) [MISS]
+2026/08/23 06:05:44 [optimize] shot 6 trial crf=20 harmonic= 95.70 (min= 93.10) [HIT ]
+2026/08/23 06:05:52 [optimize] shot 6 trial crf=22 harmonic= 94.51 (min= 91.35) [MISS]
+2026/08/23 06:06:00 [optimize] shot 6 trial crf=21 harmonic= 95.16 (min= 92.87) [HIT ]
+2026/08/23 06:06:00 [optimize] shot 6 done: crf=21 met=true trials=6
+2026/08/23 06:06:00 [optimize] shot 8/26 start
+2026/08/23 06:06:14 [optimize] shot 7 trial crf=36 harmonic= 73.39 (min= 65.76) [MISS]
+2026/08/23 06:06:30 [optimize] shot 7 trial crf=15 harmonic= 96.23 (min= 91.55) [HIT ]
+2026/08/23 06:06:45 [optimize] shot 7 trial crf=25 harmonic= 91.06 (min= 86.56) [MISS]
+2026/08/23 06:06:59 [optimize] shot 7 trial crf=20 harmonic= 94.42 (min= 89.70) [MISS]
+2026/08/23 06:07:15 [optimize] shot 7 trial crf=17 harmonic= 95.64 (min= 91.04) [HIT ]
+2026/08/23 06:07:30 [optimize] shot 7 trial crf=18 harmonic= 95.26 (min= 90.68) [HIT ]
+2026/08/23 06:07:45 [optimize] shot 7 trial crf=19 harmonic= 94.83 (min= 90.02) [MISS]
+2026/08/23 06:07:45 [optimize] shot 7 done: crf=18 met=true trials=7
+2026/08/23 06:07:45 [optimize] shot 9/26 start
+2026/08/23 06:07:55 [optimize] shot 8 trial crf=36 harmonic= 75.64 (min= 67.75) [MISS]
+2026/08/23 06:08:06 [optimize] shot 8 trial crf=15 harmonic= 98.54 (min= 96.54) [HIT ]
+2026/08/23 06:08:16 [optimize] shot 8 trial crf=25 harmonic= 93.58 (min= 90.78) [MISS]
+2026/08/23 06:08:26 [optimize] shot 8 trial crf=20 harmonic= 96.99 (min= 94.72) [HIT ]
+2026/08/23 06:08:36 [optimize] shot 8 trial crf=22 harmonic= 95.87 (min= 93.33) [HIT ]
+2026/08/23 06:08:46 [optimize] shot 8 trial crf=23 harmonic= 95.25 (min= 92.73) [HIT ]
+2026/08/23 06:08:56 [optimize] shot 8 trial crf=24 harmonic= 94.46 (min= 92.02) [MISS]
+2026/08/23 06:08:56 [optimize] shot 8 done: crf=23 met=true trials=7
+2026/08/23 06:08:56 [optimize] shot 10/26 start
+2026/08/23 06:09:02 [optimize] shot 9 trial crf=36 harmonic= 75.47 (min= 67.46) [MISS]
+2026/08/23 06:09:09 [optimize] shot 9 trial crf=15 harmonic= 97.47 (min= 91.04) [HIT ]
+2026/08/23 06:09:15 [optimize] shot 9 trial crf=25 harmonic= 92.07 (min= 86.82) [MISS]
+2026/08/23 06:09:21 [optimize] shot 9 trial crf=20 harmonic= 95.55 (min= 89.45) [HIT ]
+2026/08/23 06:09:28 [optimize] shot 9 trial crf=22 harmonic= 94.35 (min= 88.45) [MISS]
+2026/08/23 06:09:34 [optimize] shot 9 trial crf=21 harmonic= 95.02 (min= 88.98) [HIT ]
+2026/08/23 06:09:34 [optimize] shot 9 done: crf=21 met=true trials=6
+2026/08/23 06:09:34 [optimize] shot 11/26 start
+2026/08/23 06:09:40 [optimize] shot 10 trial crf=36 harmonic= 82.70 (min= 79.68) [MISS]
+2026/08/23 06:09:45 [optimize] shot 10 trial crf=15 harmonic= 98.35 (min= 97.20) [HIT ]
+2026/08/23 06:09:51 [optimize] shot 10 trial crf=25 harmonic= 94.45 (min= 92.04) [MISS]
+2026/08/23 06:09:57 [optimize] shot 10 trial crf=20 harmonic= 96.89 (min= 95.12) [HIT ]
+2026/08/23 06:10:02 [optimize] shot 10 trial crf=22 harmonic= 96.12 (min= 94.00) [HIT ]
+2026/08/23 06:10:08 [optimize] shot 10 trial crf=23 harmonic= 95.60 (min= 93.39) [HIT ]
+2026/08/23 06:10:14 [optimize] shot 10 trial crf=24 harmonic= 95.10 (min= 92.73) [HIT ]
+2026/08/23 06:10:14 [optimize] shot 10 done: crf=24 met=true trials=7
+2026/08/23 06:10:14 [optimize] shot 12/26 start
+2026/08/23 06:10:20 [optimize] shot 11 trial crf=36 harmonic= 74.51 (min= 72.38) [MISS]
+2026/08/23 06:10:26 [optimize] shot 11 trial crf=15 harmonic= 97.17 (min= 96.43) [HIT ]
+2026/08/23 06:10:32 [optimize] shot 11 trial crf=25 harmonic= 91.86 (min= 90.22) [MISS]
+2026/08/23 06:10:37 [optimize] shot 11 trial crf=20 harmonic= 95.28 (min= 94.05) [HIT ]
+2026/08/23 06:10:43 [optimize] shot 11 trial crf=22 harmonic= 94.25 (min= 92.72) [MISS]
+2026/08/23 06:10:49 [optimize] shot 11 trial crf=21 harmonic= 94.74 (min= 93.45) [MISS]
+2026/08/23 06:10:49 [optimize] shot 11 done: crf=20 met=true trials=6
+2026/08/23 06:10:49 [optimize] shot 13/26 start
+2026/08/23 06:11:01 [optimize] shot 12 trial crf=36 harmonic= 75.68 (min= 61.79) [MISS]
+2026/08/23 06:11:15 [optimize] shot 12 trial crf=15 harmonic= 97.49 (min= 92.49) [HIT ]
+2026/08/23 06:11:29 [optimize] shot 12 trial crf=25 harmonic= 92.75 (min= 88.65) [MISS]
+2026/08/23 06:11:43 [optimize] shot 12 trial crf=20 harmonic= 95.87 (min= 91.80) [HIT ]
+2026/08/23 06:11:56 [optimize] shot 12 trial crf=22 harmonic= 94.85 (min= 91.12) [MISS]
+2026/08/23 06:12:11 [optimize] shot 12 trial crf=21 harmonic= 95.36 (min= 91.59) [HIT ]
+2026/08/23 06:12:11 [optimize] shot 12 done: crf=21 met=true trials=6
+2026/08/23 06:12:11 [optimize] shot 14/26 start
+2026/08/23 06:12:17 [optimize] shot 13 trial crf=36 harmonic= 77.76 (min= 73.85) [MISS]
+2026/08/23 06:12:25 [optimize] shot 13 trial crf=15 harmonic= 96.71 (min= 96.18) [HIT ]
+2026/08/23 06:12:32 [optimize] shot 13 trial crf=25 harmonic= 92.63 (min= 91.40) [MISS]
+2026/08/23 06:12:40 [optimize] shot 13 trial crf=20 harmonic= 95.32 (min= 94.52) [HIT ]
+2026/08/23 06:12:48 [optimize] shot 13 trial crf=22 harmonic= 94.44 (min= 93.45) [MISS]
+2026/08/23 06:12:55 [optimize] shot 13 trial crf=21 harmonic= 94.94 (min= 93.94) [MISS]
+2026/08/23 06:12:55 [optimize] shot 13 done: crf=20 met=true trials=6
+2026/08/23 06:12:55 [optimize] shot 15/26 start
+2026/08/23 06:13:02 [optimize] shot 14 trial crf=36 harmonic= 78.44 (min= 76.56) [MISS]
+2026/08/23 06:13:10 [optimize] shot 14 trial crf=15 harmonic= 96.54 (min= 96.04) [HIT ]
+2026/08/23 06:13:17 [optimize] shot 14 trial crf=25 harmonic= 92.53 (min= 91.50) [MISS]
+2026/08/23 06:13:25 [optimize] shot 14 trial crf=20 harmonic= 95.18 (min= 94.48) [HIT ]
+2026/08/23 06:13:32 [optimize] shot 14 trial crf=22 harmonic= 94.33 (min= 93.46) [MISS]
+2026/08/23 06:13:39 [optimize] shot 14 trial crf=21 harmonic= 94.76 (min= 94.06) [MISS]
+2026/08/23 06:13:39 [optimize] shot 14 done: crf=20 met=true trials=6
+2026/08/23 06:13:39 [optimize] shot 16/26 start
+2026/08/23 06:13:49 [optimize] shot 15 trial crf=36 harmonic= 82.05 (min= 74.76) [MISS]
+2026/08/23 06:13:59 [optimize] shot 15 trial crf=15 harmonic= 98.17 (min= 97.51) [HIT ]
+2026/08/23 06:14:10 [optimize] shot 15 trial crf=25 harmonic= 94.48 (min= 92.06) [MISS]
+2026/08/23 06:14:20 [optimize] shot 15 trial crf=20 harmonic= 96.87 (min= 95.59) [HIT ]
+2026/08/23 06:14:29 [optimize] shot 15 trial crf=22 harmonic= 96.00 (min= 94.30) [HIT ]
+2026/08/23 06:14:39 [optimize] shot 15 trial crf=23 harmonic= 95.57 (min= 93.68) [HIT ]
+2026/08/23 06:14:49 [optimize] shot 15 trial crf=24 harmonic= 95.05 (min= 92.80) [HIT ]
+2026/08/23 06:14:49 [optimize] shot 15 done: crf=24 met=true trials=7
+2026/08/23 06:14:49 [optimize] shot 17/26 start
+2026/08/23 06:14:58 [optimize] shot 16 trial crf=36 harmonic= 80.50 (min= 76.34) [MISS]
+2026/08/23 06:15:08 [optimize] shot 16 trial crf=15 harmonic= 98.70 (min= 98.23) [HIT ]
+2026/08/23 06:15:17 [optimize] shot 16 trial crf=25 harmonic= 94.37 (min= 92.60) [MISS]
+2026/08/23 06:15:27 [optimize] shot 16 trial crf=20 harmonic= 97.09 (min= 96.25) [HIT ]
+2026/08/23 06:15:37 [optimize] shot 16 trial crf=22 harmonic= 96.19 (min= 95.01) [HIT ]
+2026/08/23 06:15:47 [optimize] shot 16 trial crf=23 harmonic= 95.63 (min= 94.28) [HIT ]
+2026/08/23 06:15:56 [optimize] shot 16 trial crf=24 harmonic= 95.02 (min= 93.67) [HIT ]
+2026/08/23 06:15:56 [optimize] shot 16 done: crf=24 met=true trials=7
+2026/08/23 06:15:56 [optimize] shot 18/26 start
+2026/08/23 06:16:04 [optimize] shot 17 trial crf=36 harmonic= 76.16 (min= 73.03) [MISS]
+2026/08/23 06:16:12 [optimize] shot 17 trial crf=15 harmonic= 99.47 (min= 98.80) [HIT ]
+2026/08/23 06:16:20 [optimize] shot 17 trial crf=25 harmonic= 93.66 (min= 92.04) [MISS]
+2026/08/23 06:16:28 [optimize] shot 17 trial crf=20 harmonic= 97.33 (min= 96.20) [HIT ]
+2026/08/23 06:16:37 [optimize] shot 17 trial crf=22 harmonic= 96.07 (min= 94.84) [HIT ]
+2026/08/23 06:16:45 [optimize] shot 17 trial crf=23 harmonic= 95.30 (min= 93.90) [HIT ]
+2026/08/23 06:16:53 [optimize] shot 17 trial crf=24 harmonic= 94.51 (min= 93.16) [MISS]
+2026/08/23 06:16:53 [optimize] shot 17 done: crf=23 met=true trials=7
+2026/08/23 06:16:53 [optimize] shot 19/26 start
+2026/08/23 06:17:01 [optimize] shot 18 trial crf=36 harmonic= 74.10 (min= 71.15) [MISS]
+2026/08/23 06:17:10 [optimize] shot 18 trial crf=15 harmonic= 97.11 (min= 95.83) [HIT ]
+2026/08/23 06:17:18 [optimize] shot 18 trial crf=25 harmonic= 91.77 (min= 89.75) [MISS]
+2026/08/23 06:17:26 [optimize] shot 18 trial crf=20 harmonic= 95.25 (min= 93.44) [HIT ]
+2026/08/23 06:17:34 [optimize] shot 18 trial crf=22 harmonic= 94.11 (min= 92.28) [MISS]
+2026/08/23 06:17:42 [optimize] shot 18 trial crf=21 harmonic= 94.72 (min= 93.00) [MISS]
+2026/08/23 06:17:42 [optimize] shot 18 done: crf=20 met=true trials=6
+2026/08/23 06:17:42 [optimize] shot 20/26 start
+2026/08/23 06:17:49 [optimize] shot 19 trial crf=36 harmonic= 78.42 (min= 76.40) [MISS]
+2026/08/23 06:17:57 [optimize] shot 19 trial crf=15 harmonic= 98.64 (min= 98.16) [HIT ]
+2026/08/23 06:18:05 [optimize] shot 19 trial crf=25 harmonic= 93.74 (min= 92.84) [MISS]
+2026/08/23 06:18:12 [optimize] shot 19 trial crf=20 harmonic= 96.92 (min= 96.32) [HIT ]
+2026/08/23 06:18:20 [optimize] shot 19 trial crf=22 harmonic= 95.84 (min= 94.94) [HIT ]
+2026/08/23 06:18:28 [optimize] shot 19 trial crf=23 harmonic= 95.19 (min= 94.24) [HIT ]
+2026/08/23 06:18:36 [optimize] shot 19 trial crf=24 harmonic= 94.51 (min= 93.58) [MISS]
+2026/08/23 06:18:36 [optimize] shot 19 done: crf=23 met=true trials=7
+2026/08/23 06:18:36 [optimize] shot 21/26 start
+2026/08/23 06:18:44 [optimize] shot 20 trial crf=36 harmonic= 78.62 (min= 76.22) [MISS]
+2026/08/23 06:18:53 [optimize] shot 20 trial crf=15 harmonic= 98.24 (min= 97.61) [HIT ]
+2026/08/23 06:19:01 [optimize] shot 20 trial crf=25 harmonic= 93.61 (min= 92.37) [MISS]
+2026/08/23 06:19:09 [optimize] shot 20 trial crf=20 harmonic= 96.60 (min= 95.89) [HIT ]
+2026/08/23 06:19:17 [optimize] shot 20 trial crf=22 harmonic= 95.59 (min= 94.61) [HIT ]
+2026/08/23 06:19:25 [optimize] shot 20 trial crf=23 harmonic= 94.97 (min= 94.02) [MISS]
+2026/08/23 06:19:25 [optimize] shot 20 done: crf=22 met=true trials=6
+2026/08/23 06:19:25 [optimize] shot 22/26 start
+2026/08/23 06:19:32 [optimize] shot 21 trial crf=36 harmonic= 78.07 (min= 76.29) [MISS]
+2026/08/23 06:19:41 [optimize] shot 21 trial crf=15 harmonic= 98.62 (min= 98.01) [HIT ]
+2026/08/23 06:19:48 [optimize] shot 21 trial crf=25 harmonic= 93.65 (min= 92.23) [MISS]
+2026/08/23 06:19:55 [optimize] shot 21 trial crf=20 harmonic= 96.86 (min= 95.93) [HIT ]
+2026/08/23 06:20:02 [optimize] shot 21 trial crf=22 harmonic= 95.80 (min= 94.71) [HIT ]
+2026/08/23 06:20:10 [optimize] shot 21 trial crf=23 harmonic= 95.05 (min= 93.99) [HIT ]
+2026/08/23 06:20:17 [optimize] shot 21 trial crf=24 harmonic= 94.44 (min= 93.21) [MISS]
+2026/08/23 06:20:17 [optimize] shot 21 done: crf=23 met=true trials=7
+2026/08/23 06:20:17 [optimize] shot 23/26 start
+2026/08/23 06:20:24 [optimize] shot 22 trial crf=36 harmonic= 82.49 (min= 81.39) [MISS]
+2026/08/23 06:20:31 [optimize] shot 22 trial crf=15 harmonic= 97.01 (min= 96.73) [HIT ]
+2026/08/23 06:20:39 [optimize] shot 22 trial crf=25 harmonic= 93.83 (min= 93.13) [MISS]
+2026/08/23 06:20:46 [optimize] shot 22 trial crf=20 harmonic= 96.04 (min= 95.69) [HIT ]
+2026/08/23 06:20:53 [optimize] shot 22 trial crf=22 harmonic= 95.23 (min= 94.83) [HIT ]
+2026/08/23 06:21:00 [optimize] shot 22 trial crf=23 harmonic= 94.81 (min= 94.37) [MISS]
+2026/08/23 06:21:00 [optimize] shot 22 done: crf=22 met=true trials=6
+2026/08/23 06:21:00 [optimize] shot 24/26 start
+2026/08/23 06:21:09 [optimize] shot 23 trial crf=36 harmonic= 78.96 (min= 76.78) [MISS]
+2026/08/23 06:21:17 [optimize] shot 23 trial crf=15 harmonic= 98.24 (min= 97.58) [HIT ]
+2026/08/23 06:21:25 [optimize] shot 23 trial crf=25 harmonic= 93.69 (min= 92.41) [MISS]
+2026/08/23 06:21:33 [optimize] shot 23 trial crf=20 harmonic= 96.63 (min= 95.67) [HIT ]
+2026/08/23 06:21:41 [optimize] shot 23 trial crf=22 harmonic= 95.58 (min= 94.50) [HIT ]
+2026/08/23 06:21:49 [optimize] shot 23 trial crf=23 harmonic= 95.03 (min= 93.81) [HIT ]
+2026/08/23 06:21:57 [optimize] shot 23 trial crf=24 harmonic= 94.40 (min= 93.06) [MISS]
+2026/08/23 06:21:57 [optimize] shot 23 done: crf=23 met=true trials=7
+2026/08/23 06:21:57 [optimize] shot 25/26 start
+2026/08/23 06:22:05 [optimize] shot 24 trial crf=36 harmonic= 79.31 (min= 77.26) [MISS]
+2026/08/23 06:22:14 [optimize] shot 24 trial crf=15 harmonic= 98.92 (min= 97.82) [HIT ]
+2026/08/23 06:22:22 [optimize] shot 24 trial crf=25 harmonic= 93.98 (min= 92.82) [MISS]
+2026/08/23 06:22:32 [optimize] shot 24 trial crf=20 harmonic= 97.09 (min= 95.84) [HIT ]
+2026/08/23 06:22:41 [optimize] shot 24 trial crf=22 harmonic= 96.05 (min= 94.83) [HIT ]
+2026/08/23 06:22:49 [optimize] shot 24 trial crf=23 harmonic= 95.39 (min= 94.02) [HIT ]
+2026/08/23 06:22:58 [optimize] shot 24 trial crf=24 harmonic= 94.79 (min= 93.23) [MISS]
+2026/08/23 06:22:58 [optimize] shot 24 done: crf=23 met=true trials=7
+2026/08/23 06:22:58 [optimize] shot 26/26 start
+2026/08/23 06:23:06 [optimize] shot 25 trial crf=36 harmonic= 83.82 (min= 79.72) [MISS]
+2026/08/23 06:23:15 [optimize] shot 25 trial crf=15 harmonic= 99.19 (min= 98.11) [HIT ]
+2026/08/23 06:23:24 [optimize] shot 25 trial crf=25 harmonic= 96.40 (min= 94.89) [HIT ]
+2026/08/23 06:23:32 [optimize] shot 25 trial crf=30 harmonic= 92.85 (min= 91.77) [MISS]
+2026/08/23 06:23:41 [optimize] shot 25 trial crf=27 harmonic= 95.39 (min= 94.04) [HIT ]
+2026/08/23 06:23:49 [optimize] shot 25 trial crf=28 harmonic= 94.42 (min= 93.31) [MISS]
+2026/08/23 06:23:49 [optimize] shot 25 done: crf=27 met=true trials=6
+2026/08/23 06:23:51 [pipeline] muxing audio (mode=copy)
+2026/08/23 06:23:51 [pipeline] temp cleaned: D:\mycode\engram-opt\build\tmp\20260823-055530-p7372
+2026/08/23 06:23:51 [optimize] 25/26 shot(s) met target score (metric=harmonic)
+2026/08/23 06:23:51 [optimize] size: 18.74 MB -> 53.76 MB (+186.8%)
+2026/08/23 06:23:51 [optimize] output: D:\mycode\engram-opt\test.opt.mkv (total trials=165)
