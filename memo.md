@@ -55,7 +55,12 @@ build/
 - 手順（冪等・毎回上書き）: 同梱バイナリ存在確認 → `go build -o build/<optimizer>.exe ./cmd/engram` → `THIRD-PARTY-NOTICES.txt` 自動生成 → LICENSE/README.txt/tmp プレースホルダ配置 → `dist/engram-opt_<version>_<os>-<arch>.zip` 作成。
 - バージョン名: 既定は `git describe --tags --always --dirty`、未整備なら `snapshot`。`-version` / `-out` / `-no-zip` フラグあり。
 - Zipは決定論的（エントリ時刻をエポック固定）→ 同内容なら同一ハッシュ。
-- **NOTICES方式**: 「ライセンス種別＋ソースURLの一覧」方式（配置図の定義どおり）。Goモジュールは `go list -m all` の実依存グラフ＋モジュールキャッシュ内LICENSEファイルの実読み分類（推測なし）。FFmpegはGPLv3ビルドである旨と原文URLを明記（本ツールは別プロセス実行のみでリンクなし＝mere aggregation、本体はMIT維持）。ライセンス全文の埋め込みは将来課題。
+- **NOTICES方式（Phase 8で全文埋め込みに強化済み）**: 同梱物ごとに**ライセンス全文を逐字埋め込み**する。GPLv3は本文同梱が配布要件、MIT/Apacheも著作権表示＋許諾文の同梱が条件のためURL参照では不十分（コンプライアンス精査の結果方式変更）。
+  - Goモジュール: ビルド済み本体から `go version -m` で**実リンク依存のみ**収集し、モジュールキャッシュ内LICENSEファイルを実読みして埋め込む。`go mod download -json` によりキャッシュ欠けも自動補完。旧 `go list -m all` 方式（ビルド不要なテスト依存まで列挙しunknown多数）からの置き換え。
+  - タグzipにLICENSEが含まれない依存（実例: mikelolasagasti/xz v1.0.1）は、上流原文を `third_party/licenses/modules/<path>_<ver>_LICENSE.txt` としてベンダリングしオーバーライドする。mattn/go-localereader は同様の事例のためLICENSE追加済みリビジョンへ更新。
+  - FFmpeg GPLv3原文・av-scenechange MIT原文は `third_party/licenses/` 配下に公式ソースから取得したものを固定同梱。生成時に分類ラベル照合を行い破損・取り違えを出荷前に検知する。
+  - **unknown・埋め込み不能依存が1件でもあればパッケージング全体を失敗させる**（fail-fast）。全件一括列挙のため修正ループが不要。fail-fast時は期待されるオーバーライドファイル名をエラー文に表示（再ベンダリング手順内蔵）。
+  - GPL §6対応としてFFmpeg節に「無改変のまま convey・Corresponding Source は同URLから取得可能」の文言を明記。
 - av-scenechange v0.24.1 のライセンスは MIT（asm由来のdav1d BSD／x264 ISC／rav1e BSD-2+AOM特許条項を含む。v0.24.1タグのLICENSEで確認済み）。
 
 ## 依存ツール

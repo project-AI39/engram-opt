@@ -237,7 +237,8 @@ go build -o build/optimizer.exe ./cmd/engram
 
 `build/` は配布Zipと同一構造のステージング領域という規約。パッケージャーは
 同梱バイナリの存在確認 → 本体ビルド → THIRD-PARTY-NOTICES自動生成
-（Goモジュールの実依存グラフからライセンス分類）→ LICENSE/README同梱 →
+（実リンク依存のみを収集し、**ライセンス全文を逐字埋め込み**。タグzipに
+LICENSEが無い依存は上流原文を third_party/licenses/ 配下で補完）→ LICENSE/README同梱 →
 決定論的Zip出力までを一括で行う。出力: `dist/engram-opt_<version>_<os>-<arch>.zip`
 （バージョンは `git describe` 由来。`-version` で上書き可）。
 
