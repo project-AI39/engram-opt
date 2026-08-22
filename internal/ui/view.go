@@ -94,12 +94,16 @@ func (m Model) renderDashboard() string {
 
 	// 進捗バー＋統計
 	b.WriteString(m.progress.View() + "\n")
-	statLine := strings.Join([]string{
+	statChips := []string{
 		chip("shots ", fmt.Sprintf("%d/%d", m.doneCount, maxInt(m.total, 0))),
 		chip("trials ", fmt.Sprint(m.trialCount)),
 		chip("elapsed ", formatDuration(m.elapsed)),
-	}, dimStyle.Render("  "))
-	b.WriteString(statLine + "\n")
+	}
+	// ETAは推定値なので "~" を前置する。推定不能（検出中・最初のシーン完了前等）は非表示
+	if d, ok := m.eta(); ok {
+		statChips = append(statChips, chip("eta ", "~"+formatDuration(d)))
+	}
+	b.WriteString(strings.Join(statChips, dimStyle.Render("  ")) + "\n")
 
 	// シーン一覧
 	if m.total > 0 {
@@ -241,6 +245,37 @@ func (m Model) runningAny() bool {
 }
 
 // ===== 共通ユーティリティ =====
+
+// eta は完了シーンの平均所要時間から残り時間を推定する。
+// シーン処理は逐次（memo.md「エンジン設計」）のため実行中は原則1シーンだが、
+// 異常時に備えて複数runningも加算する。推定不能な状況では ok=false:
+//   - 検出中・完了済み・失敗（phaseOptimizing 以外）
+//   - まだ1シーンも完了していない（平均が計算できない）
+func (m Model) eta() (time.Duration, bool) {
+	if m.phase != phaseOptimizing || m.doneCount == 0 {
+		return 0, false
+	}
+	var sum time.Duration
+	var runningStart time.Time
+	running := 0
+	for _, st := range m.shots {
+		switch st.status {
+		case shotDone:
+			sum += st.dur
+		case shotRunning:
+			if running == 0 {
+				runningStart = st.started
+			}
+			running++
+		}
+	}
+	remaining := m.total - m.doneCount - running
+	d := (sum / time.Duration(m.doneCount)) * time.Duration(maxInt(remaining, 0))
+	for range running {
+		d += time.Since(runningStart)
+	}
+	return d, true
+}
 
 // shorten は長いパスを中略表示する。
 // 日本語パス等のマルチバイト文字をバイト境界で切断して文字化けさせないため、

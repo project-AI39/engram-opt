@@ -83,6 +83,10 @@ type shotState struct {
 	status shotStatus
 	last   *engine.Trial
 	result *engine.Result
+
+	// started / dur はETA算出用（sceneStartで記録し、完了時に所要時間へ確定）。
+	started time.Time
+	dur     time.Duration
 }
 
 // Options はダッシュボードの表示に必要なメタ情報。

@@ -3,7 +3,10 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
+
+	"engram-opt/internal/domain"
 )
 
 // shorten のルーン単位動作。マルチバイト（日本語）パスがバイト境界で
@@ -46,5 +49,42 @@ func TestShortenFormat(t *testing.T) {
 	want := strings.Repeat("a", 19) + "..." + strings.Repeat("a", 19)
 	if got := shorten(in, 42); got != want {
 		t.Fatalf("shorten = %q, want %q", got, want)
+	}
+}
+
+// ETA推定の決定論ケース: 完了シーン平均 × 残りシーン数。
+// running中シーンの time.Since は非決定論的なため、完了のみ／検出中の両面を検証する。
+func TestEtaEstimation(t *testing.T) {
+	m := testWizardModel(t) // stageSetup のModelを流用し、run表示用フィールドだけ上書きする
+	m.stage = stageRun
+	m.phase = phaseOptimizing
+	m.started = time.Now()
+	m.total = 4
+	m.doneCount = 2
+	m.scenes = []domain.Scene{
+		{Index: 0}, {Index: 1}, {Index: 2}, {Index: 3},
+	}
+	base := time.Now()
+	m.shots = map[int]*shotState{
+		0: {status: shotDone, dur: 10 * time.Second},
+		1: {status: shotDone, dur: 30 * time.Second},
+		2: {status: shotRunning, started: base.Add(-5 * time.Second)},
+	}
+
+	d, ok := m.eta()
+	if !ok {
+		t.Fatal("eta should be estimable while optimizing with completed shots")
+	}
+	// 平均20s × 残り1シーン + 実行中5s経過（数ミリ秒の誤差を許容）
+	want := 25 * time.Second
+	if d < want || d > want+time.Second {
+		t.Fatalf("eta = %v, want ~%v", d, want)
+	}
+
+	// 最初のシーン完了前は推定不能
+	m2 := m
+	m2.doneCount = 0
+	if _, ok := m2.eta(); ok {
+		t.Fatal("eta must be unavailable before any shot completes")
 	}
 }

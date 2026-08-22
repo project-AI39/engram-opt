@@ -76,6 +76,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sceneStartMsg:
 		if st, ok := m.shots[msg.index]; ok {
 			st.status = shotRunning
+			st.started = time.Now()
 		}
 		return m, nil
 
@@ -92,6 +93,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if st, ok := m.shots[msg.index]; ok {
 			st.status = shotDone
 			st.result = msg.result
+			if !st.started.IsZero() {
+				st.dur = time.Since(st.started)
+			}
 		}
 		m.doneCount++
 		cmd := m.progress.SetPercent(float64(m.doneCount) / float64(m.total))
