@@ -146,7 +146,7 @@ func newWizardForm(opts Options) wizardForm {
 	}
 
 	outRes := textinput.New()
-	outRes.Placeholder = "native または 1280x720"
+	outRes.Placeholder = "native | sd | hd | fhd | 4k | 1280x720"
 	outRes.Prompt = ""
 	outRes.CharLimit = 32
 	if opts.OutRes != "" {

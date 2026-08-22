@@ -172,7 +172,7 @@ func registerRun(root *cobra.Command) {
 	f.BoolVar(&tui, "tui", false, "show interactive dashboard (falls back to plain logs when stdout is not a terminal)")
 	f.StringVar(&logFile, "log-file", "", "append log output to this file (for unattended runs)")
 	f.StringVar(&evalProf, "eval-profile", domain.DefaultEvalProfileName, "evaluation algorithm+resolution set: hd1080 | uhd4k")
-	f.StringVar(&outRes, "out-res", "native", "output resolution: native or <even>x<even> (e.g. 1280x720)")
+	f.StringVar(&outRes, "out-res", "native", "output resolution: native | sd(854x480) | hd(720p) | fhd(1080p) | 4k(2160p) | <even>x<even>")
 }
 
 // ===== 起動モード判定（memo.md「TUIウィザード化」） =====

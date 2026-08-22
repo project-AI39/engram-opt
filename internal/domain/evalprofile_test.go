@@ -29,7 +29,7 @@ func TestEffectiveEvalProfileDefaults(t *testing.T) {
 	}
 }
 
-// 出力解像度パース: native / WxH / 各種不正値。
+// 出力解像度パース: native / プリセット名 / WxHカスタム / 各種不正値。
 func TestParseOutRes(t *testing.T) {
 	cases := []struct {
 		in      string
@@ -40,11 +40,15 @@ func TestParseOutRes(t *testing.T) {
 		{"", 0, 0, false},
 		{"1280x720", 1280, 720, false},
 		{"3840x2160", 3840, 2160, false},
-		{"1279x720", 0, 0, true},         // 奇数
-		{"0x720", 0, 0, true},            // 非正
-		{"abc", 0, 0, true},              // 形式不正
-		{"1920", 0, 0, true},             // x無し
 		{"1920X1080", 1920, 1080, false}, // 大文字X許容
+		{"sd", 854, 480, false},
+		{"HD", 1280, 720, false},   // 大文字小文字不問
+		{"fhd", 1920, 1080, false}, //
+		{"4K", 3840, 2160, false},  //
+		{"1279x720", 0, 0, true},   // 奇数
+		{"0x720", 0, 0, true},      // 非正
+		{"abc", 0, 0, true},        // 形式不正
+		{"1920", 0, 0, true},       // x無し
 	}
 	for _, tc := range cases {
 		w, h, err := ParseOutRes(tc.in)
