@@ -17,6 +17,12 @@ type Orchestrator struct {
 	Detector  domain.SceneDetector
 	Encoder   domain.VideoEncoder
 	Evaluator domain.QualityEvaluator
+
+	// Muxer / Audio は最終ミックスでの音声付与（memo.md「音声処理」）。
+	// Audio が none または空、あるいは Muxer が nil の場合は音声なしで出力する
+	// （既存の呼び出し側・テストとの後方互換）。
+	Muxer domain.AudioMuxer
+	Audio domain.AudioMode
 }
 
 // ProgressCallbacks は進捗通知のためのコールバック群。すべてnil許容。
@@ -61,6 +67,17 @@ func (o *Orchestrator) Run(ctx context.Context, inputPath, outputPath, workDir s
 func (o *Orchestrator) run(ctx context.Context, inputPath, outputPath, workDir string, cfg domain.SearchConfig, cb ProgressCallbacks) (*PipelineReport, error) {
 	if o.Detector == nil || o.Encoder == nil || o.Evaluator == nil {
 		return nil, fmt.Errorf("orchestrator requires detector, encoder and evaluator")
+	}
+	// 音声設定の早期検証（fail-fast）。実行終盤のmuxで初めて気づくのを防ぐ。
+	switch o.Audio {
+	case "", domain.AudioNone:
+		// 音声なし（従来動作・後方互換）
+	case domain.AudioCopy, domain.AudioOpus, domain.AudioAAC:
+		if o.Muxer == nil {
+			return nil, fmt.Errorf("audio mode %q requires an AudioMuxer on the orchestrator", o.Audio)
+		}
+	default:
+		return nil, fmt.Errorf("invalid audio mode %q", o.Audio)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -108,8 +125,23 @@ func (o *Orchestrator) run(ctx context.Context, inputPath, outputPath, workDir s
 	for _, r := range results {
 		chunks = append(chunks, r.BestChunkPath)
 	}
-	if err := o.Encoder.ConcatChunks(ctx, chunks, outputPath); err != nil {
+
+	// 音声付与の要否。必要な場合は結合結果をjobDir内の中間ファイルへ出し、
+	// 最終ミックス（MuxAudio）で outputPath へ書き出す。音声が不要なら
+	// 従来どおり結合が直接 outputPath を生成する。
+	useAudio := o.Audio != "" && o.Audio != domain.AudioNone
+	concatTarget := outputPath
+	if useAudio {
+		concatTarget = filepath.Join(workDir, "concat_video.mkv")
+	}
+	if err := o.Encoder.ConcatChunks(ctx, chunks, concatTarget); err != nil {
 		return nil, fmt.Errorf("concat: %w", err)
+	}
+	if useAudio {
+		log.Printf("[pipeline] muxing audio (mode=%s)", o.Audio)
+		if err := o.Muxer.MuxAudio(ctx, concatTarget, inputPath, o.Audio, outputPath); err != nil {
+			return nil, fmt.Errorf("audio mux (%s): %w", o.Audio, err)
+		}
 	}
 
 	sumTrials := 0

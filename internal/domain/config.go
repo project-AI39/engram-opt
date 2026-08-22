@@ -1,5 +1,7 @@
 package domain
 
+import "fmt"
+
 // VideoCodec 対応コーデック種別。
 type VideoCodec string
 
@@ -32,3 +34,39 @@ const (
 	DefaultMaxCRF      = 36
 	DefaultTargetScore = 95.0
 )
+
+// AudioMode 最終出力への音声の扱い（memo.md「音声処理」）。
+// 音声はシーン分割の対象外であり、完成映像への最終ミックス時に1回だけ適用される。
+type AudioMode string
+
+const (
+	AudioCopy AudioMode = "copy" // 元音声を無劣化コピー（既定）
+	AudioOpus AudioMode = "opus" // libopusへ再圧縮（VBR・ビットレート自動）
+	AudioAAC  AudioMode = "aac"  // AACへ再圧縮（ABR・ビットレート自動）
+	AudioNone AudioMode = "none" // 音声トラックを破棄
+)
+
+// DefaultAudioMode はCLIフラグの既定値。
+const DefaultAudioMode = AudioCopy
+
+// ParseAudioMode はCLIフラグ値を AudioMode へ変換する。未知名はエラー。
+func ParseAudioMode(s string) (AudioMode, error) {
+	switch m := AudioMode(s); m {
+	case AudioCopy, AudioOpus, AudioAAC, AudioNone:
+		return m, nil
+	default:
+		return "", fmt.Errorf("invalid audio mode %q (use copy | opus | aac | none)", s)
+	}
+}
+
+// TargetBitrateKbps はチャンネル数から目標ビットレート(kbps)を返す。
+// ch < 6 をステレオ扱い（mono含む）、ch >= 6 をサラウンド扱いとする。
+func TargetBitrateKbps(channels int, mode AudioMode) int {
+	if channels >= 6 {
+		if mode == AudioAAC {
+			return 320
+		}
+		return 256
+	}
+	return 128
+}

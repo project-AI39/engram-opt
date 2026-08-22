@@ -95,3 +95,56 @@ func TestPipelineEndToEnd(t *testing.T) {
 		t.Fatalf("job dir %s should be removed on success", jobDir)
 	}
 }
+
+// 音声つき入力でのE2E（memo.md「音声処理」）。
+// 既定相当の copy モードで、元音声（ステレオAAC）が最終出力へ引き継がれることを検証する。
+func TestPipelineEndToEndWithAudio(t *testing.T) {
+	testutil.RequireBinaries(t, "ffmpeg", "ffprobe", "av-scenechange")
+	ctx := context.Background()
+
+	root := t.TempDir()
+	jobDir := filepath.Join(root, "job")
+	output := filepath.Join(root, "final.opt.mkv")
+	video := testutil.GenerateSampleVideoWithAudio(t, root)
+
+	inAudio := testutil.ProbeAudioStreams(t, ctx, video)
+	if len(inAudio) != 1 || inAudio[0].CodecName != "aac" || inAudio[0].Channels != 2 {
+		t.Fatalf("fixture spec mismatch: audio = %+v, want single stereo aac", inAudio)
+	}
+
+	orch := &engine.Orchestrator{
+		Detector:  avscenechange.New(),
+		Encoder:   ffenc.New(),
+		Evaluator: libvmaf.New(),
+		Muxer:     ffenc.New(),
+		Audio:     domain.AudioCopy,
+	}
+	cfg := domain.SearchConfig{
+		Codec:       domain.CodecH264,
+		MinCRF:      domain.DefaultMinCRF,
+		MaxCRF:      domain.DefaultMaxCRF,
+		TargetScore: domain.DefaultTargetScore,
+		Preset:      "medium",
+	}
+
+	if _, err := orch.Run(ctx, video, output, jobDir, cfg, engine.ProgressCallbacks{}); err != nil {
+		t.Fatalf("pipeline failed: %v", err)
+	}
+
+	outInfo := testutil.ProbeStreamInfo(t, ctx, output)
+	if outInfo.Frames != 180 {
+		t.Fatalf("output frames = %d, want 180", outInfo.Frames)
+	}
+	if outInfo.PixFmt != "yuv420p10le" {
+		t.Fatalf("output pix_fmt = %q, want yuv420p10le", outInfo.PixFmt)
+	}
+	// 音声はシーン分割の対象外。元のステレオAACがそのまま1本引き継がれる
+	outAudio := testutil.ProbeAudioStreams(t, ctx, output)
+	if len(outAudio) != 1 || outAudio[0].CodecName != "aac" || outAudio[0].Channels != 2 {
+		t.Fatalf("output audio = %+v, want single stereo aac (copied)", outAudio)
+	}
+
+	if _, serr := os.Stat(jobDir); !os.IsNotExist(serr) {
+		t.Fatalf("job dir %s should be removed on success", jobDir)
+	}
+}

@@ -142,3 +142,64 @@ func HasFFmpegEncoder(t testing.TB, encoder string) bool {
 	}
 	return strings.Contains(string(out), " "+encoder+" ")
 }
+
+// GenerateSampleVideoWithAudio は GenerateSampleVideo と同一映像（180フレーム・
+// カット60/120）にステレオAACのサイン音声を付けた入力を生成する。
+// 音声ミックス（--audio copy/opus/aac）の統合テスト・E2E用。
+func GenerateSampleVideoWithAudio(t testing.TB, dir string) string {
+	t.Helper()
+	video := GenerateSampleVideo(t, dir)
+	ffmpegPath, err := toolbin.Resolve("ffmpeg")
+	if err != nil {
+		t.Skipf("ffmpeg unavailable (%v)", err)
+	}
+	out := filepath.Join(dir, "sample_audio.mp4")
+	cmd := exec.Command(ffmpegPath,
+		"-hide_banner", "-nostdin", "-loglevel", "error", "-y",
+		"-i", video,
+		"-f", "lavfi", "-i", "sine=frequency=440:duration=6",
+		"-map", "0:v:0", "-map", "1:a:0",
+		"-c:v", "copy",
+		"-c:a", "aac", "-b:a", "96k", "-ac", "2",
+		"-shortest", out)
+	if b, cerr := cmd.CombinedOutput(); cerr != nil {
+		t.Fatalf("generating sample with audio failed: %v\n%s", cerr, b)
+	}
+	return out
+}
+
+// AudioStreamInfo は音声ストリーム検証のための最小限の情報。
+type AudioStreamInfo struct {
+	CodecName string
+	Channels  int
+}
+
+// ProbeAudioStreams は全音声ストリームの codec_name / channels を返す。
+func ProbeAudioStreams(t testing.TB, ctx context.Context, mediaPath string) []AudioStreamInfo {
+	t.Helper()
+	ffprobePath, err := toolbin.Resolve("ffprobe")
+	if err != nil {
+		t.Skipf("ffprobe unavailable (%v)", err)
+	}
+	out, err := exec.CommandContext(ctx, ffprobePath,
+		"-v", "error", "-select_streams", "a",
+		"-show_entries", "stream=codec_name,channels",
+		"-of", "json", mediaPath).Output()
+	if err != nil {
+		t.Fatalf("ffprobe (audio) failed: %v", err)
+	}
+	var parsed struct {
+		Streams []struct {
+			CodecName string `json:"codec_name"`
+			Channels  int    `json:"channels"`
+		} `json:"streams"`
+	}
+	if uerr := json.Unmarshal(out, &parsed); uerr != nil {
+		t.Fatalf("unexpected ffprobe output: %s (%v)", out, uerr)
+	}
+	streams := make([]AudioStreamInfo, 0, len(parsed.Streams))
+	for _, s := range parsed.Streams {
+		streams = append(streams, AudioStreamInfo{CodecName: s.CodecName, Channels: s.Channels})
+	}
+	return streams
+}

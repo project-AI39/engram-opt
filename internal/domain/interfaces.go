@@ -25,3 +25,12 @@ type QualityEvaluator interface {
 	// Evaluate 元動画の特定区間とエンコード済みチャンクを比較評価する。
 	Evaluate(ctx context.Context, originalPath string, scene Scene, encodedChunkPath string) (QualityMetrics, error)
 }
+
+// AudioMuxer 完成映像への音声付与の契約（memo.md「音声処理」）。
+// 音声はシーン分割の対象外のため、チャンク単位ではなく最終ミックスで1回だけ呼ばれる。
+type AudioMuxer interface {
+	// MuxAudio videoPath（音声なし完成映像）と originalPath（元動画）から
+	// mode に従って音声を付与し outputPath へ書き出す。
+	// 元動画に音声が無い場合は映像のみを outputPath へ書き出す（全モード共通）。
+	MuxAudio(ctx context.Context, videoPath string, originalPath string, mode AudioMode, outputPath string) error
+}

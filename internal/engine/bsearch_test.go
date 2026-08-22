@@ -14,8 +14,9 @@ import (
 
 // fakeEncoder は EncodeChunk 呼び出しでマーカーファイルを作るだけの実装。
 type fakeEncoder struct {
-	calls       []domain.EncodeParams
-	concatCalls [][]string // ConcatChunks に渡されたチャンクパス列の履歴
+	calls         []domain.EncodeParams
+	concatCalls   [][]string // ConcatChunks に渡されたチャンクパス列の履歴
+	concatTargets []string   // ConcatChunks に渡された出力先の履歴
 }
 
 func (f *fakeEncoder) Name() string { return "fake-encoder" }
@@ -27,6 +28,7 @@ func (f *fakeEncoder) EncodeChunk(_ context.Context, _ string, _ domain.Scene, p
 
 func (f *fakeEncoder) ConcatChunks(_ context.Context, chunkPaths []string, finalOutputPath string) error {
 	f.concatCalls = append(f.concatCalls, chunkPaths)
+	f.concatTargets = append(f.concatTargets, finalOutputPath)
 	return os.WriteFile(finalOutputPath, []byte("concat"), 0o644)
 }
 
