@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -292,7 +293,8 @@ func buildScenes(cuts []int64, frameCount int64) ([]domain.Scene, error) {
 
 // probeTotalFrames はコンテナメタデータ（nb_frames）から総フレーム数を取得する。
 // メタデータが提供されない形式（N/A 等）の場合は -1 を返し、整合確認をスキップする。
-// デコードを伴わないヘッダ参照のみのため高速。
+// デコードを伴わないヘッダ参照のみのため高速。パイプライン最初のffprobe呼び出しでもあるため、
+// 非動画・破損ファイルはここで「入力を読めない」ことが分かる形で失敗させる。
 func probeTotalFrames(ctx context.Context, ffprobePath, inputPath string) (int64, error) {
 	out, err := exec.CommandContext(ctx, ffprobePath,
 		"-v", "error", "-select_streams", "v:0",
@@ -300,6 +302,12 @@ func probeTotalFrames(ctx context.Context, ffprobePath, inputPath string) (int64
 		"-of", "default=noprint_wrappers=1:nokey=1",
 		inputPath).Output()
 	if err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			// ffprobeのstderr（"Invalid data found..."等）を添え、原因推測可能にする
+			return -1, fmt.Errorf("input is not a readable video (ffprobe: %s): %w",
+				strings.TrimSpace(toolbin.Tail(string(ee.Stderr), 3)), err)
+		}
 		return -1, fmt.Errorf("ffprobe failed: %w", err)
 	}
 	n, perr := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
@@ -308,5 +316,3 @@ func probeTotalFrames(ctx context.Context, ffprobePath, inputPath string) (int64
 	}
 	return n, nil
 }
-
-// tail は文字列の末尾 maxLines 行のみを返す（エラーメッセージ用の切り詰め）。
