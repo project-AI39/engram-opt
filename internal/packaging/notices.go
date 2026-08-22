@@ -371,7 +371,7 @@ whose FULL TEXT is included below.
 Contents:
   1. FFmpeg 8.1.2 (GPLv3)            -> ffmpeg.exe / ffprobe.exe
   2. av-scenechange v0.24.1 (MIT)    -> av-scenechange.exe
-  3. Go modules embedded in optimizer.exe
+  3. Go modules embedded in engram-opt.exe
 
 `)
 	fmt.Fprintf(&b, `================================================================================
@@ -409,7 +409,7 @@ FULL LICENSE TEXT:
 `, ascMITText)
 
 	fmt.Fprintf(&b, `================================================================================
-3. GO MODULES EMBEDDED IN OPTIMIZER.EXE (%d modules)
+ 3. GO MODULES EMBEDDED IN ENGRAM-OPT.EXE (%d modules)
 ================================================================================
 Collected from the built binary's embedded build info ("go version -m"):
 only modules actually linked into the executable are listed.

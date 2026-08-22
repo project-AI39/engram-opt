@@ -35,7 +35,7 @@
 
 ```text
 build/
-  ├── optimizer (.exe)         # GoでコンパイルされたCLI本体
+  ├── engram-opt (.exe)         # GoでコンパイルされたCLI本体
   ├── README.txt               # 使い方・初回セットアップ案内
   ├── LICENSE                  # 自作ツールのライセンス (MIT等)
   ├── THIRD-PARTY-NOTICES.txt  # 同梱OSSのライセンス＆ソースコードURL一覧
@@ -52,7 +52,7 @@ build/
 ## パッケージング（実装済み）
 
 - コマンド: **`go run ./cmd/engram-package`**（実体は `internal/packaging`）。Dev-CI Parityのためsetup同様Goコマンド一発。
-- 手順（冪等・毎回上書き）: 同梱バイナリ存在確認 → `go build -o build/<optimizer>.exe ./cmd/engram` → `THIRD-PARTY-NOTICES.txt` 自動生成 → LICENSE/README.txt/tmp プレースホルダ配置 → `dist/engram-opt_<version>_<os>-<arch>.zip` 作成。
+- 手順（冪等・毎回上書き）: 同梱バイナリ存在確認 → `go build -o build/engram-opt.exe ./cmd/engram` → `THIRD-PARTY-NOTICES.txt` 自動生成 → LICENSE/README.txt/tmp プレースホルダ配置 → `dist/engram-opt_<version>_<os>-<arch>.zip` 作成。
 - バージョン名: 既定は `git describe --tags --always --dirty`、未整備なら `snapshot`。`-version` / `-out` / `-no-zip` フラグあり。
 - Zipは決定論的（エントリ時刻をエポック固定）→ 同内容なら同一ハッシュ。
 - **NOTICES方式（Phase 8で全文埋め込みに強化済み）**: 同梱物ごとに**ライセンス全文を逐字埋め込み**する。GPLv3は本文同梱が配布要件、MIT/Apacheも著作権表示＋許諾文の同梱が条件のためURL参照では不十分（コンプライアンス精査の結果方式変更）。

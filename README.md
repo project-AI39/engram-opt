@@ -26,8 +26,8 @@
 2. 実行方法は2つ:
 
 ```console
-optimizer.exe                       ← 設定ウィザードが起動（ダブルクリックOK）
-optimizer.exe optimize 入力動画.mp4  ← そのまま即実行
+engram-opt.exe                       ← 設定ウィザードが起動（ダブルクリックOK）
+engram-opt.exe optimize 入力動画.mp4  ← そのまま即実行
 ```
 
 完了すると入力と同じ場所に `<入力名>.opt.mkv` が出力される。
@@ -182,7 +182,7 @@ SHOT  FRAMES       CRF   VMAF(harm)  MET
 
 試行チャンク等はジョブごとに隔離される:
 
-- 配布版: `<optimizer.exeと同じ場所>/tmp/<起動日時>/`
+- 配布版: `<engram-opt.exeと同じ場所>/tmp/<起動日時>/`
 - 開発時: `<リポジトリ>/build/tmp/<起動日時>/`
 
 **成功時は自動削除。失敗・中断時のみ保持**され、パスがログに出る
@@ -193,7 +193,7 @@ SHOT  FRAMES       CRF   VMAF(harm)  MET
 長い動画の全体実行前に、まず1シーンだけで挙動を確認できる:
 
 ```console
-optimizer.exe optimize input.mp4 --shot 0
+engram-opt.exe optimize input.mp4 --shot 0
 ```
 
 結合せず勝利CRFのチャンク（`.mkv`）を保持し、パスをログに出す。チャンクは
@@ -204,7 +204,7 @@ tmp配下に残るので再生して品質を目視確認した後、手動で�
 ## 無人実行（1日単位の運用）
 
 ```console
-optimizer.exe optimize long_video.mp4 --codec av1 --tui --log-file run.log
+engram-opt.exe optimize long_video.mp4 --codec av1 --tui --log-file run.log
 ```
 
 - `--log-file` は追記モード。TUI表示中も書き込みは継続する（画面には出ない）
@@ -232,7 +232,7 @@ optimizer.exe optimize long_video.mp4 --codec av1 --tui --log-file run.log
 go run ./cmd/engram-package
 
 # 開発時のクイックビルドのみ
-go build -o build/optimizer.exe ./cmd/engram
+go build -o build/engram-opt.exe ./cmd/engram
 ```
 
 `build/` は配布Zipと同一構造のステージング領域という規約。パッケージャーは

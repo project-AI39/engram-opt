@@ -53,10 +53,10 @@ func Run(root string, opt Options) (string, error) {
 	}
 	opt.logf("[package] bundled tools OK")
 
-	// 2) 本体ビルド → build/<optimizer>.exe
-	exe := filepath.Join(buildDir, toolbin.ToolName("optimizer"))
+	// 2) 本体ビルド → build/<engram-opt>.exe（バイナリ名はアプリ名）
+	exe := filepath.Join(buildDir, toolbin.ToolName("engram-opt"))
 	if err := goBuild(root, exe); err != nil {
-		return "", fmt.Errorf("building optimizer: %w", err)
+		return "", fmt.Errorf("building engram-opt: %w", err)
 	}
 	opt.logf("[package] built %s", exe)
 

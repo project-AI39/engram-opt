@@ -107,7 +107,7 @@ func TestAssembleNoticesEmbedsFullTexts(t *testing.T) {
 		"1. FFMPEG 8.1.2 (full_build, static executables)",
 		"b8cdefab5f50590a076c27c2b56b0294a0e6154faded28ba1ba05ebc4f801f57",
 		"2. AV-SCENECHANGE v0.24.1",
-		"3. GO MODULES EMBEDDED IN OPTIMIZER.EXE (1 modules)",
+		"3. GO MODULES EMBEDDED IN ENGRAM-OPT.EXE (1 modules)",
 		"github.com/zzz/last@v1.0.0",
 		"License: MIT",
 		"FULL LICENSE TEXT:",
@@ -126,7 +126,7 @@ func TestAssembleNoticesEmbedsFullTexts(t *testing.T) {
 // `go version -m` 出力のパース: dep行のみを実リンク依存として採用する。
 func TestParseGoVersionM(t *testing.T) {
 	sample := []byte(strings.Join([]string{
-		"build\\optimizer.exe: go1.27.0",
+		"build\\engram-opt.exe: go1.27.0",
 		"\tpath\tengram-opt/cmd/engram",
 		"\tmod\tengram-opt\t(devel)\t",
 		"\tdep\tgithub.com/spf13/cobra\tv1.10.2\th1:abc=",
@@ -176,7 +176,7 @@ func TestZipDirectoryDeterministic(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		write("optimizer.exe", "binary-bytes")
+		write("engram-opt.exe", "binary-bytes")
 		write("bin/ffmpeg.exe", "ffmpeg")
 		write("tmp/.placeholder", "placeholder")
 		out := filepath.Join(t.TempDir(), "out.zip")
@@ -211,7 +211,7 @@ func TestZipDirectoryDeterministic(t *testing.T) {
 	_, out2 := buildZip()
 
 	for name, want := range map[string]string{
-		"optimizer.exe":    "binary-bytes",
+		"engram-opt.exe":    "binary-bytes",
 		"bin/ffmpeg.exe":   "ffmpeg",
 		"tmp/.placeholder": "placeholder",
 	} {
