@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"engram-opt/internal/domain"
 )
@@ -272,5 +274,42 @@ func TestOrchestratorRunSingleScene(t *testing.T) {
 	}
 	if _, err := os.Stat(output); err != nil {
 		t.Fatalf("finalized output missing: %v", err)
+	}
+}
+
+// retryWithBackoff の挙動: 成功まで再試行・上限到達で最終エラー・ctx中断。
+func TestRetryWithBackoff(t *testing.T) {
+	// 3回目で成功
+	calls := 0
+	err := retryWithBackoff(context.Background(), 4, func() error {
+		calls++
+		if calls < 3 {
+			return errors.New("transient")
+		}
+		return nil
+	})
+	if err != nil || calls != 3 {
+		t.Fatalf("err=%v calls=%d, want nil/3", err, calls)
+	}
+
+	// 上限到達: 最終エラーを返す
+	calls = 0
+	err = retryWithBackoff(context.Background(), 2, func() error {
+		calls++
+		return fmt.Errorf("always fail %d", calls)
+	})
+	if err == nil || calls != 2 || !strings.Contains(err.Error(), "always fail 2") {
+		t.Fatalf("err=%v calls=%d", err, calls)
+	}
+
+	// 待機中のctxキャンセルで即座に中断（250ms待ちより早く帰る）
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	start := time.Now()
+	if err := retryWithBackoff(ctx, 4, func() error { return errors.New("x") }); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if elapsed := time.Since(start); elapsed > 200*time.Millisecond {
+		t.Fatalf("cancel during wait should return promptly, took %v", elapsed)
 	}
 }

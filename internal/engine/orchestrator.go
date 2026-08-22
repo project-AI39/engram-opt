@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"engram-opt/internal/domain"
 )
@@ -170,8 +171,8 @@ func (o *Orchestrator) run(ctx context.Context, inputPath, outputPath, workDir s
 	if _, err := os.Stat(outputPath); err == nil {
 		log.Printf("[pipeline] overwriting existing output: %s", outputPath)
 	}
-	if err := os.Rename(stagedPath, outputPath); err != nil {
-		return nil, fmt.Errorf("finalizing output: %w", err)
+	if err := renameWithRetry(ctx, stagedPath, outputPath); err != nil {
+		return nil, err
 	}
 
 	sumTrials := 0
@@ -197,6 +198,45 @@ func stagingPathFor(output string) string {
 	ext := filepath.Ext(output)
 	base := strings.TrimSuffix(filepath.Base(output), ext)
 	return filepath.Join(dir, fmt.Sprintf(".%s.part-%d%s", base, os.Getpid(), ext))
+}
+
+// renameWithRetry はステージング確定の置換を短期リトライする。
+// WindowsではAVスキャナや検索インデクサが完成直後のファイルを一瞬開き、
+// MoveFileEx(REPLACE_EXISTING)が共有違反で失敗することがある（一過性・再試行可）。
+// 数時間かけた探索の成果を確定1発で失わないための防御。
+func renameWithRetry(ctx context.Context, oldPath, newPath string) error {
+	err := retryWithBackoff(ctx, 4, func() error {
+		return os.Rename(oldPath, newPath)
+	})
+	if err != nil {
+		return fmt.Errorf("finalizing output: %w", err)
+	}
+	return nil
+}
+
+// retryWithBackoff は op を最大 attempts 回まで指数バックオフ付きで再試行する
+// （待機: 250ms, 500ms, 1s）。opが成功したら即時return。ctxは待機中も中断できる。
+func retryWithBackoff(ctx context.Context, attempts int, op func() error) error {
+	var lastErr error
+	for i := 0; i < attempts; i++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if i > 0 {
+			delay := time.Duration(250*(1<<(i-1))) * time.Millisecond
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		lastErr = op()
+		if lastErr == nil {
+			return nil
+		}
+		log.Printf("[pipeline] attempt %d/%d failed (%v); retrying", i+1, attempts, lastErr)
+	}
+	return lastErr
 }
 
 // RequireDistinctPaths は入力と出力が同一パスでないことを検証する。
