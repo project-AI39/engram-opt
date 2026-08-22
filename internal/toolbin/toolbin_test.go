@@ -65,7 +65,7 @@ func stageDeployed(t *testing.T) string {
 // 本体の隣に bin/ がある → 配置済みレイアウトとしてその階層が base になる。
 func TestDetectLayoutDeployed(t *testing.T) {
 	base := stageDeployed(t)
-	exe := filepath.Join(base, ToolName("optimizer"))
+	exe := filepath.Join(base, ToolName("engram-opt"))
 
 	lay, err := detectLayoutFor(exe)
 	if err != nil {
@@ -99,7 +99,7 @@ func TestDetectLayoutDevFallback(t *testing.T) {
 // どちらの手がかりもない環境では、対処法（setup）を案内するエラーになる。
 func TestDetectLayoutUnresolvable(t *testing.T) {
 	outside := t.TempDir()
-	exe := filepath.Join(outside, ToolName("optimizer"))
+	exe := filepath.Join(outside, ToolName("engram-opt"))
 	t.Chdir(outside) // go.mod 探索も失敗させる
 
 	if _, err := detectLayoutFor(exe); err == nil || !strings.Contains(err.Error(), "setup") {
@@ -114,7 +114,7 @@ func TestResolveDeployed(t *testing.T) {
 	if err := os.WriteFile(dummyProbe, []byte("dummy"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	exe := filepath.Join(base, ToolName("optimizer"))
+	exe := filepath.Join(base, ToolName("engram-opt"))
 
 	got, err := resolveFor(exe, "ffprobe")
 	if err != nil {
@@ -128,7 +128,7 @@ func TestResolveDeployed(t *testing.T) {
 // 解決対象が無い場合は場所と対処法を示すエラーになる。
 func TestResolveMissingGuidesSetup(t *testing.T) {
 	base := stageDeployed(t) // ffmpeg はあるが ffprobe は無い状態
-	exe := filepath.Join(base, ToolName("optimizer"))
+	exe := filepath.Join(base, ToolName("engram-opt"))
 
 	_, err := resolveFor(exe, "ffprobe")
 	if err == nil || !strings.Contains(err.Error(), "setup") {
@@ -140,7 +140,7 @@ func TestResolveMissingGuidesSetup(t *testing.T) {
 func TestTempRootFollowsLayout(t *testing.T) {
 	// 配置済み
 	base := stageDeployed(t)
-	got, err := tempRootFor(filepath.Join(base, ToolName("optimizer")))
+	got, err := tempRootFor(filepath.Join(base, ToolName("engram-opt")))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

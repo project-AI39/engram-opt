@@ -45,7 +45,7 @@ func RepoRoot() (string, error) {
 //
 // 唯一の正式レイアウトは配布Zipと同一のステージング構造（memo.md「配置」）:
 //
-//	<base>/optimizer.exe   本体
+//	<base>/engram-opt.exe  本体
 //	<base>/bin/            外部バイナリ群
 //	<base>/tmp/            実行時一領域
 //
@@ -61,7 +61,7 @@ type Layout struct {
 // 直接確認する自己検証方式。OSの一時領域などの場所に基づく間接ヒューリスティックは
 // 意図的に使わない:
 //   - go run / go test の生成バイナリはキャッシュに置かれ隣に bin/ がない → 開発扱い
-//   - ローカルで go build -o build/optimizer.exe しても bin/ が隣にあるため配布扱い
+//   - ローカルで go build -o build/engram-opt.exe しても bin/ が隣にあるため配布扱い
 //     （開発・配布で同一のコードパスを通る）
 //   - ユーザーがZipをどのパスへ解凍しても正しく動作する
 func DetectLayout() (Layout, error) {

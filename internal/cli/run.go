@@ -23,7 +23,7 @@ import (
 )
 
 // registerRun はルートコマンドへ実行系（位置引数 input ＋フラグ＋RunE）を組み込む。
-// optimizeサブコマンドは廃止した（単一目的ツールのため、入力はrootの位置引数で直接受ける）。
+// 単一目的ツールのため入力はrootの位置引数で直接受ける（optimizeサブコマンドは廃止済み）。
 //
 // パイプライン:
 //
@@ -160,7 +160,7 @@ func registerRun(root *cobra.Command) {
 
 // ===== 起動モード判定（memo.md「TUIウィザード化」） =====
 
-// launchMode は optimize の実行形態。
+// launchMode はランタイムCLI（engram-opt）の実行形態。
 type launchMode int
 
 const (
