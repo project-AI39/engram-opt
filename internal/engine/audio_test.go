@@ -65,9 +65,15 @@ func TestOrchestratorAudioMuxFlow(t *testing.T) {
 	}
 	c := muxer.calls[0]
 	wantStaged := filepath.Join(filepath.Dir(output), ".final.part-")
-	if c.videoPath != intermediate || c.originalPath != "in.mp4" ||
+	// 入力はengine境界で絶対パスへ正規化される（相対パス指定でも
+	// cmd.Dirを変える子プロセスから参照できるようにするため）
+	absIn, aerr := filepath.Abs("in.mp4")
+	if aerr != nil {
+		t.Fatal(aerr)
+	}
+	if c.videoPath != intermediate || c.originalPath != absIn ||
 		c.mode != domain.AudioOpus || !strings.HasPrefix(c.outputPath, wantStaged) {
-		t.Fatalf("mux call = %+v (want staged prefix %q)", c, wantStaged)
+		t.Fatalf("mux call = %+v (want staged prefix %q, absIn %q)", c, wantStaged, absIn)
 	}
 	if _, err := os.Stat(output); err != nil {
 		t.Fatalf("final output missing: %v", err)
