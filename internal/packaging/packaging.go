@@ -59,15 +59,15 @@ func Run(root string, opt Options) (string, error) {
 	}
 	opt.logf("[package] built %s", exe)
 
-	// 3) THIRD-PARTY-NOTICES.txt 自動生成
-	notices, err := BuildThirdPartyNotices(root)
+	// 3) THIRD-PARTY-NOTICES.txt 自動生成（ビルド済み本体から実リンク依存を収集）
+	notices, err := BuildThirdPartyNotices(root, exe)
 	if err != nil {
 		return "", fmt.Errorf("generating third-party notices: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(buildDir, "THIRD-PARTY-NOTICES.txt"), []byte(notices), 0o644); err != nil {
 		return "", err
 	}
-	opt.logf("[package] wrote THIRD-PARTY-NOTICES.txt")
+	opt.logf("[package] wrote THIRD-PARTY-NOTICES.txt (full license texts embedded)")
 
 	// 4) LICENSE 同梱 + 5) tmp プレースホルダ
 	if err := copyFile(filepath.Join(root, "LICENSE"), filepath.Join(buildDir, "LICENSE")); err != nil {
