@@ -2,8 +2,9 @@
 
 ## 現状
 
-- 依存関係の自動セットアップ、cobra CLI骨格、Phase 2〜4（domain／detector／encoder／evaluator／engine.bsearch／orchestrator統合）、Phase 5（bubbletea TUIダッシュボード＋ログ方針確定）、Phase 6（音声3モード＋README整備・配布レイアウト統一）、Phase 7（TUIウィザード化: setup→run→summaryの3ステージ・起動モード自動判定・--headless）、配布物整備（LICENSE・THIRD-PARTY-NOTICES全文埋め込み・`go run ./cmd/engram-package` によるZip化・解凍先からの実行検証済み）、Phase 8（TUIウィザードのパラメータ実値選択化）まで **実装完了・動作確認済み**。次ステップ候補はCI（GitHub ActionsでのDev-CI Parity）、実動画での長時間検証。開発フェーズは memo.md「モジュール構成（実装方針）」、実測知見は memo.md「依存ツール」節を参照。
+- 依存関係の自動セットアップ、cobra CLI骨格、Phase 2〜4（domain／detector／encoder／evaluator／engine.bsearch／orchestrator統合）、Phase 5（bubbletea TUIダッシュボード＋ログ方針確定）、Phase 6（音声3モード＋README整備・配布レイアウト統一）、Phase 7（TUIウィザード化: setup→run→summaryの3ステージ・起動モード自動判定・--headless）、配布物整備（LICENSE・THIRD-PARTY-NOTICES全文埋め込み・`go run ./cmd/engram-package` によるZip化・解凍先からの実行検証済み）、Phase 8（TUIウィザードのパラメータ実値選択化）、起動導線の確定（cobra mousetrap無効化によるダブルクリック→ウィザード直行・裸起動経路のdecideLaunch一本化〔--headless/--tui排他を全経路で適用〕・裸起動エラー時の[Enter]待ち・フラグ値のウィザード初期値反映）まで **実装完了・動作確認済み**。次ステップ候補はCI（GitHub ActionsでのDev-CI Parity。race検出はgcc要のためローカルWindowsでは不可、CIランナー向け）、実動画での長時間検証。開発フェーズは memo.md「モジュール構成（実装方針）」、実測知見は memo.md「依存ツール」節を参照。
 - 導入済みライブラリはすべて使用中: `cobra`（CLI）／`bubbletea`・`lipgloss`・`bubbles`（TUIダッシュボード `internal/ui/`）。先行導入用アンカー `tools/tools.go` は役目を終えて削除済み（`charmbracelet/log` は依存ごと除去）。
+- コミットメッセージ規約運用中: gitmoji＋Conventional Commits（説明は日本語）。絵文字/typeの対応は `.vscode/settings.json` のcommit-message-editorテンプレートに定義（既存履歴全コミットも書換済み）。
 - 設計の唯一の情報源は `memo.md`。作業前に必ず読むこと。
 - 構想: Go製の動画最適化CLI（シーン分割 → エンコード → VMAF v1評価 → CRF二分探索のPer-Shot最適化）＋TUIダッシュボード。1日単位の無人動作を想定。
 
