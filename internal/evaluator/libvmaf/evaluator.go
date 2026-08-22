@@ -132,6 +132,23 @@ func (e *Evaluator) evaluateWithProfile(ctx context.Context, ffmpegPath, workDir
 	return parseReport(raw, scene)
 }
 
+// buildEvalGraph は評価用の filter_complex グラフ文字列を組み立てる純関数。
+//
+// 評価の一貫性（この関数の契約）:
+//   - 参照側[1:v]/劣化側[0:v]の**両方**を profile.Width×profile.Height へ
+//     リサイズしてから libvmaf へ入力する。評価アルゴリズムが前提とする
+//     解像度へ正規化しないとスコアがずれ、正しいCRF境界を見つけられないため。
+//   - 両側が同一変形を受けるため、比較の公平性は保たれる。
+//   - select→タイムスタンプ正規化→scale の順で、部分区間でもPTS整合を保つ。
+func buildEvalGraph(scene domain.Scene, profile domain.EvalProfile, fpsNum, fpsDen int64) string {
+	stamp := fmt.Sprintf("settb=1/%d,setpts=%d*N", fpsNum, fpsDen)
+	refChain := fmt.Sprintf("select='between(n,%d,%d)',%s,scale=%d:%d",
+		scene.StartFrame, scene.EndFrame, stamp, profile.Width, profile.Height)
+	distChain := fmt.Sprintf("%s,scale=%d:%d", stamp, profile.Width, profile.Height)
+	return fmt.Sprintf("[1:v]%s[r];[0:v]%s[d];[d][r]libvmaf=log_fmt=json:log_path=%s:model='version=%s':shortest=1:eof_action=endall",
+		refChain, distChain, logFileName, profile.Model)
+}
+
 // probeFrameRate は元動画のフレームレートを有理数（num/den、ともに整数）で取得する。
 // タイムスタンプ正規化式にそのまま埋め込むため、浮動小数点には落とさない。
 func probeFrameRate(ctx context.Context, ffprobePath, inputPath string) (int64, int64, error) {
