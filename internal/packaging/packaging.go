@@ -62,8 +62,9 @@ func Run(root string, opt Options) (string, error) {
 	opt.logf("[package] bundled tools OK")
 
 	// 2) 本体ビルド → build/<engram-opt>.exe（バイナリ名はアプリ名）
+	// Zip名と同一のバージョンを実行バイナリへ埋め込み、--version で確認できるようにする
 	exe := filepath.Join(buildDir, toolbin.ToolName("engram-opt"))
-	if err := goBuild(root, exe); err != nil {
+	if err := goBuild(root, exe, opt.Version); err != nil {
 		return "", fmt.Errorf("building engram-opt: %w", err)
 	}
 	opt.logf("[package] built %s", exe)
@@ -116,8 +117,13 @@ func Run(root string, opt Options) (string, error) {
 
 // goBuild はリポジトリルートで本体をビルドし outPath へ出力する。
 // クロスコンパイルは行わない（ホストOS/arch向け。配布は現行pin windows/amd64前提）。
-func goBuild(root, outPath string) error {
-	cmd := exec.Command("go", "build", "-o", outPath, "./cmd/engram-opt")
+func goBuild(root, outPath, version string) error {
+	args := []string{"build"}
+	if version != "" {
+		args = append(args, "-ldflags", "-X main.version="+version)
+	}
+	args = append(args, "-o", outPath, "./cmd/engram-opt")
+	cmd := exec.Command("go", args...)
 	cmd.Dir = root
 	if b, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("go build: %w\n%s", err, toolbin.Tail(string(b), 15))

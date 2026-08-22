@@ -68,10 +68,17 @@ func ShouldPauseAfterError() bool {
 // シグナル対応コンテキスト付きで実行し、Ctrl+C / SIGTERM で ctx がキャンセルされ、
 // 実行中の ffmpeg 等の子プロセスは exec.CommandContext 経由で停止される
 // （孤児プロセス化の防止）。
-func Execute() error {
+//
+// version は --version 表示用（配布ビルドではZip名と同一のgit describe値が
+// -ldflags -X で注入される。開発時は main 側の既定値 devel）。
+func Execute(version string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return NewRootCmd().ExecuteContext(ctx)
+	root := NewRootCmd()
+	root.Version = version
+	// cobra既定の "engram-opt version X" 形式を1行へ短縮（スクリプトでの取得も容易に）
+	root.SetVersionTemplate("engram-opt {{.Version}}\n")
+	return root.ExecuteContext(ctx)
 }
 
 // ExecuteSetup は開発者向けセットアップCLI（cmd/engram-setup）を実行する。
