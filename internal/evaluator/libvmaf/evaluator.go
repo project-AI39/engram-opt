@@ -2,12 +2,11 @@
 //
 // 実測（FFmpeg 8.1.2 / libvmaf v3系）に基づく実装上の要点:
 //   - フィルタ名は 8系で `libvmaf` に改名されている（旧 `vmaf` も一応受容）。
-//   - モデル指定は `model=version=vmaf_v1.0.16_3d0h`。CAMBI特徴量を含むため、
-//     入力が低解像度だと `no feature 'cambi_hrs_1080_...'` エラーで失敗する。
-//     → 両入力を必ず 1920x1080 へリサイズしてから投入する（解像度ガード）。
-//   - フォールバックモデルは `vmaf_v0.6.1neg`。
+//   - 評価は domain.EvalProfile（アルゴリズム×評価解像度）に完全に従う。
+//     両入力をプロファイル解像度へ正規化してから比較する。モデルの切替は行わない——
+//     失敗時はエラーとして即座に表面化させる（フェイルファスト。暗黙フォールバック禁止）。
 //   - JSONログの pooled_metrics.vmaf に min / mean / harmonic_mean が揃っており、
-//     合否判定（harmonic_mean）に必要な値はすべてここから取れる。
+//     合否判定に必要な値はすべてここから取れる。
 //   - log_path に Windows の絶対パス（C:\...）を渡すとフィルタオプション区切りの
 //     「:」と衝突して壊れる。→ 作業ディレクトリへ相対パスで書き出し、cmd.Dir を
 //     そのディレクトリに設定することで回避する。
@@ -29,11 +28,7 @@ import (
 	"engram-opt/internal/toolbin"
 )
 
-const (
-	primaryModel  = "version=vmaf_v1.0.16_3d0h" // 主力モデル（CAMBI含む・要1080p）
-	fallbackModel = "version=vmaf_v0.6.1neg"    // フォールバック（低解像度でも動作）
-	logFileName   = "vmaf_report.json"
-)
+const logFileName = "vmaf_report.json"
 
 // Evaluator は domain.QualityEvaluator の実装。
 type Evaluator struct{}
@@ -47,11 +42,15 @@ func (e *Evaluator) Name() string { return "libvmaf" }
 // Evaluate 元動画の該当シーン区間とエンコード済みチャンクを比較評価する。
 // workDir には評価ログ（vmaf_report.json）の書き出し先ディレクトリを受け取る
 // （ジョブ一時領域配下。AGENTS.md「tmpも同一base直下」規約）。
-func (e *Evaluator) Evaluate(ctx context.Context, originalPath string, scene domain.Scene, encodedChunkPath string, workDir string) (metrics domain.QualityMetrics, retErr error) {
+// profile で指定されたモデル・解像度のみを使用し、失敗時は代替へ切り替えない。
+func (e *Evaluator) Evaluate(ctx context.Context, originalPath string, scene domain.Scene, encodedChunkPath string, workDir string, profile domain.EvalProfile) (metrics domain.QualityMetrics, retErr error) {
 	// 他モジュール（engine/encoder）と同様、フレームSSOT不変条件を入口で検証する。
 	// 不正区間のまま filter_complex を組むと select が空になり評価が無意味になるため。
 	if err := scene.Validate(); err != nil {
 		return domain.QualityMetrics{}, fmt.Errorf("invalid scene: %w", err)
+	}
+	if err := profile.Validate(); err != nil {
+		return domain.QualityMetrics{}, fmt.Errorf("invalid eval profile: %w", err)
 	}
 	if workDir == "" {
 		return domain.QualityMetrics{}, fmt.Errorf("evaluation requires a work directory")
@@ -88,23 +87,15 @@ func (e *Evaluator) Evaluate(ctx context.Context, originalPath string, scene dom
 		}
 	}()
 
-	metrics, primaryErr := e.evaluateWithModel(ctx, ffmpegPath, evalDir, originalPath, scene, encodedChunkPath, primaryModel, fpsNum, fpsDen)
-	if primaryErr != nil {
-		// フォールバックモデルで再試行（固定仕様）。両方の原因をerrors.Is可能な形で保持する
-		log.Printf("[vmaf] WARNING: primary model failed (%v); falling back to %s. "+
-			"Scores are model-specific and may not be comparable with other shots.",
-			primaryErr, fallbackModel)
-		m2, fbErr := e.evaluateWithModel(ctx, ffmpegPath, evalDir, originalPath, scene, encodedChunkPath, fallbackModel, fpsNum, fpsDen)
-		if fbErr != nil {
-			return domain.QualityMetrics{}, fmt.Errorf("vmaf evaluation failed (primary %s: %w / fallback %s: %w)",
-				primaryModel, primaryErr, fallbackModel, fbErr)
-		}
-		metrics = m2
+	var err2 error
+	metrics, err2 = e.evaluateWithProfile(ctx, ffmpegPath, evalDir, originalPath, scene, encodedChunkPath, profile, fpsNum, fpsDen)
+	if err2 != nil {
+		return domain.QualityMetrics{}, err2 // フェイルファスト: 暗黙のモデル切替はしない
 	}
 	return metrics, nil
 }
 
-func (e *Evaluator) evaluateWithModel(ctx context.Context, ffmpegPath, workDir, originalPath string, scene domain.Scene, chunkPath, model string, fpsNum, fpsDen int64) (domain.QualityMetrics, error) {
+func (e *Evaluator) evaluateWithProfile(ctx context.Context, ffmpegPath, workDir, originalPath string, scene domain.Scene, chunkPath string, profile domain.EvalProfile, fpsNum, fpsDen int64) (domain.QualityMetrics, error) {
 	// 入力0: エンコード済みチャンク（main=劣化側）
 	// 入力1: 元動画の該当シーン区間（reference=参照側）
 	//
@@ -119,10 +110,10 @@ func (e *Evaluator) evaluateWithModel(ctx context.Context, ffmpegPath, workDir, 
 	//   select 後の setpts の N は「選択通過フレーム」の連番になるため部分区間でも正しい。
 	stamp := fmt.Sprintf("settb=1/%d,setpts=%d*N", fpsNum, fpsDen)
 	refChain := fmt.Sprintf("select='between(n,%d,%d)',%s,scale=%d:%d",
-		scene.StartFrame, scene.EndFrame, stamp, vmafWidth, vmafHeight)
-	distChain := fmt.Sprintf("%s,scale=%d:%d", stamp, vmafWidth, vmafHeight)
-	graph := fmt.Sprintf("[1:v]%s[r];[0:v]%s[d];[d][r]libvmaf=log_fmt=json:log_path=%s:model='%s':shortest=1:eof_action=endall",
-		refChain, distChain, logFileName, model)
+		scene.StartFrame, scene.EndFrame, stamp, profile.Width, profile.Height)
+	distChain := fmt.Sprintf("%s,scale=%d:%d", stamp, profile.Width, profile.Height)
+	graph := fmt.Sprintf("[1:v]%s[r];[0:v]%s[d];[d][r]libvmaf=log_fmt=json:log_path=%s:model='version=%s':shortest=1:eof_action=endall",
+		refChain, distChain, logFileName, profile.Model)
 
 	cmd := exec.CommandContext(ctx, ffmpegPath,
 		"-hide_banner", "-nostdin", "-loglevel", "error",
@@ -132,8 +123,8 @@ func (e *Evaluator) evaluateWithModel(ctx context.Context, ffmpegPath, workDir, 
 		"-f", "null", "-")
 	cmd.Dir = workDir
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return domain.QualityMetrics{}, fmt.Errorf("libvmaf run failed (%s): %w\n%s",
-			model, err, toolbin.Tail(string(out), 20))
+		return domain.QualityMetrics{}, fmt.Errorf("libvmaf run failed (profile=%s model=%s): %w\n%s",
+			profile.Name, profile.Model, err, toolbin.Tail(string(out), 20))
 	}
 
 	raw, err := os.ReadFile(filepath.Join(workDir, logFileName))
@@ -142,12 +133,6 @@ func (e *Evaluator) evaluateWithModel(ctx context.Context, ffmpegPath, workDir, 
 	}
 	return parseReport(raw, scene)
 }
-
-// vmaf 解像度ガード: CAMBI特徴量は1080p前提のため両入力を強制スケールする。
-const (
-	vmafWidth  = 1920
-	vmafHeight = 1080
-)
 
 // probeFrameRate は元動画のフレームレートを有理数（num/den、ともに整数）で取得する。
 // タイムスタンプ正規化式にそのまま埋め込むため、浮動小数点には落とさない。

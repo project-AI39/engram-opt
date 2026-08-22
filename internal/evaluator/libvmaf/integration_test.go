@@ -26,7 +26,7 @@ func TestEvaluateIntegrationLowResInput(t *testing.T) {
 		t.Fatalf("EncodeChunk failed: %v", err)
 	}
 
-	m, err := New().Evaluate(ctx, video, scene, chunk, t.TempDir())
+	m, err := New().Evaluate(ctx, video, scene, chunk, t.TempDir(), domain.DefaultEvalProfile())
 	if err != nil {
 		t.Fatalf("Evaluate failed: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestEvaluateIntegrationFrameMismatchDetection(t *testing.T) {
 	}
 
 	longScene := domain.Scene{Index: 1, StartFrame: 0, EndFrame: 59}
-	_, err := New().Evaluate(ctx, video, longScene, chunk, t.TempDir())
+	_, err := New().Evaluate(ctx, video, longScene, chunk, t.TempDir(), domain.DefaultEvalProfile())
 	if err == nil {
 		t.Fatal("frame count mismatch must be detected as an error (fail-fast spec)")
 	}

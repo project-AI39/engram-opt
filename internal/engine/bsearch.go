@@ -76,7 +76,7 @@ func BisectScene(ctx context.Context, enc domain.VideoEncoder, ev domain.Quality
 			_ = os.Remove(out) // 失敗試行の断片を掃除
 			return domain.QualityMetrics{}, "", false, fmt.Errorf("encode crf=%d: %w", crf, err)
 		}
-		metrics, err := ev.Evaluate(ctx, inputPath, scene, out, workDir)
+		metrics, err := ev.Evaluate(ctx, inputPath, scene, out, workDir, cfg.EffectiveEvalProfile())
 		if err != nil {
 			_ = os.Remove(out)
 			return domain.QualityMetrics{}, "", false, fmt.Errorf("evaluate crf=%d: %w", crf, err)

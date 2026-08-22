@@ -53,7 +53,9 @@ func (e *Encoder) EncodeChunk(ctx context.Context, inputPath string, scene domai
 		return err
 	}
 
-	// 共通引数: シーン区間のみを選択（整数フレーム番号）し、タイムスタンプを0起点へ正規化
+	// 共通引数: シーン区間のみを選択（整数フレーム番号）し、タイムスタンプを0起点へ正規化。
+	// 出力リサイズ指定時（--out-res）は select の末尾へ scale を連結する
+	// （フレーム番号はリサイズ前の元動画基準のため、順序の入れ替えは不可）。
 	//
 	// -g（GOP長上限=シーン長）の役割:
 	//   - 先頭フレームは常にIDRになる（全エンコーダ共通の保証）
@@ -62,7 +64,7 @@ func (e *Encoder) EncodeChunk(ctx context.Context, inputPath string, scene domai
 	args := []string{
 		"-hide_banner", "-nostdin", "-loglevel", "error", "-y",
 		"-i", inputPath,
-		"-vf", fmt.Sprintf("select='between(n,%d,%d)',setpts=PTS-STARTPTS", scene.StartFrame, scene.EndFrame),
+		"-vf", buildSelectVF(scene, params.OutWidth, params.OutHeight),
 		"-frames:v", gop,
 		"-pix_fmt", pixFmt,
 		"-g", gop,
@@ -174,6 +176,17 @@ func svtPreset(preset string) (string, error) {
 		return preset, nil
 	}
 	return "", fmt.Errorf("unknown preset %q for av1/libsvtav1: use an x264-style name (veryslow..superfast) or a numeric preset", preset)
+}
+
+// buildSelectVF はチャンク切り出し用の -vf 値を組み立てる。
+// outWidth/outHeight が両方正の値の場合のみ select/setpts の末尾へ scale を連結する
+// （0は「ソース解像度維持」。片側だけの指定はValidateが拒否する前提の防御）。
+func buildSelectVF(scene domain.Scene, outWidth, outHeight int) string {
+	vf := fmt.Sprintf("select='between(n,%d,%d)',setpts=PTS-STARTPTS", scene.StartFrame, scene.EndFrame)
+	if outWidth > 0 && outHeight > 0 {
+		vf += fmt.Sprintf(",scale=%d:%d", outWidth, outHeight)
+	}
+	return vf
 }
 
 // concatEscape は concat リスト用にパス中のシングルクォートをエスケープする。

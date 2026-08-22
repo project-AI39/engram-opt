@@ -20,7 +20,7 @@ func TestEvaluateRejectsInvalidScene(t *testing.T) {
 	e := New()
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := e.Evaluate(context.Background(), "in.mp4", tc.scene, "chunk.mkv", t.TempDir()); err == nil {
+			if _, err := e.Evaluate(context.Background(), "in.mp4", tc.scene, "chunk.mkv", t.TempDir(), domain.DefaultEvalProfile()); err == nil {
 				t.Fatalf("invalid scene %+v accepted", tc.scene)
 			}
 		})

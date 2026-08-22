@@ -148,7 +148,7 @@ func TestEncodeChunkRangeCorrectnessViaVMAF(t *testing.T) {
 		t.Fatalf("EncodeChunk failed: %v", err)
 	}
 
-	m, err := libvmaf.New().Evaluate(ctx, video, scene, chunk, t.TempDir())
+	m, err := libvmaf.New().Evaluate(ctx, video, scene, chunk, t.TempDir(), domain.DefaultEvalProfile())
 	if err != nil {
 		t.Fatalf("Evaluate failed: %v", err)
 	}

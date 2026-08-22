@@ -20,6 +20,11 @@ type EncodeParams struct {
 	CRF      int    // 試行するCRF値（整数のみ。範囲はSearchConfigで制御）
 	Preset   string // 全試行で一律固定。codec別の実際の引数解決はencoder/ffmpeg内部で行う
 	BitDepth int    // 出力ビット深度: 10(yuv420p10le) / 8(yuv420p)。既定はSearchConfig.BitDepth
+
+	// OutWidth / OutHeight は出力リサイズ先（0=ソース解像度維持）。
+	// シーン選択（フレーム番号）はリサイズに影響されないため、select後にscaleする。
+	OutWidth  int
+	OutHeight int
 }
 
 // SearchConfig CRF二分探索の全体設定。
@@ -31,6 +36,14 @@ type SearchConfig struct {
 	Preset      string      // 探索中の全試行で一律固定するpreset
 	BitDepth    int         // 出力ビット深度（既定10。0は「未指定」扱いでDefaultBitDepthへ正規化される）
 	Metric      ScoreMetric // 合否判定に使うVMAF統計（既定harmonic_mean）
+
+	// Eval は評価プロファイル（アルゴリズム×評価解像度のセット）。
+	// ゼロ値は「未指定」扱いでhd1080へ正規化される。
+	Eval EvalProfile
+
+	// OutWidth / OutHeight は出力リサイズ先（0,0=ソース解像度維持）。
+	OutWidth  int
+	OutHeight int
 }
 
 // 探索パラメータの既定値（memo.md「パラメータ一覧と露出方針」）。
@@ -76,6 +89,20 @@ func (c SearchConfig) Validate() error {
 	default:
 		return fmt.Errorf("unsupported score metric %q (use harmonic | mean | min)", c.Metric)
 	}
+	if c.Eval.Model != "" {
+		if c.Eval.Width <= 0 || c.Eval.Height <= 0 || c.Eval.Name == "" {
+			return fmt.Errorf("incomplete eval profile %q (%dx%d)", c.Eval.Name, c.Eval.Width, c.Eval.Height)
+		}
+	}
+	switch {
+	case c.OutWidth == 0 && c.OutHeight == 0:
+		// リサイズなし
+	case c.OutWidth > 0 && c.OutHeight > 0 &&
+		c.OutWidth%2 == 0 && c.OutHeight%2 == 0:
+		// 偶数解像度のみ許容
+	default:
+		return fmt.Errorf("invalid out resolution %dx%d (use even positive dimensions, or 0 for native)", c.OutWidth, c.OutHeight)
+	}
 	return nil
 }
 
@@ -93,6 +120,16 @@ func (c SearchConfig) EffectiveBitDepth() int {
 		return DefaultBitDepth
 	}
 	return c.BitDepth
+}
+
+// EffectiveEvalProfile は正規化後の評価プロファイルを返す（ゼロ値→hd1080）。
+// 未知のモデル名が入っていた場合もここでは弾かない——ResolveEvalProfileによる
+// 構築時検証（フェイルファスト）が前提。
+func (c SearchConfig) EffectiveEvalProfile() EvalProfile {
+	if c.Eval.Model == "" {
+		return evalProfiles[0] // hd1080（定義順の先頭＝既定）
+	}
+	return c.Eval
 }
 
 // AudioMode 最終出力への音声の扱い（memo.md「音声処理」）。

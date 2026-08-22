@@ -45,6 +45,8 @@ func registerRun(root *cobra.Command) {
 		preset   string
 		metric   string
 		audio    string
+		evalProf string
+		outRes   string
 		tui      bool
 		headless bool
 		logFile  string
@@ -56,6 +58,19 @@ func registerRun(root *cobra.Command) {
 		var input string
 		if len(args) > 0 {
 			input = args[0]
+		}
+		// 相対パス正規化（CLI境界）: --shot等のOrchestrator非経由パスや、
+		// cmd.Dirを変える子プロセスからも参照できるようにする。
+		// Orchestrator内にも同種の防御がある（多層防御）。
+		if input != "" {
+			if abs, err := filepath.Abs(input); err == nil {
+				input = abs
+			}
+		}
+		if output != "" {
+			if abs, err := filepath.Abs(output); err == nil {
+				output = abs
+			}
 		}
 
 		// --log-file: 無人実行向けにログをファイルへも二重化する
@@ -89,7 +104,7 @@ func registerRun(root *cobra.Command) {
 		jobDir := newJobDir(tmpRoot)
 		sweepStaleJobs(tmpRoot)
 
-		cfg, err := buildSearchConfig(codec, preset, metric)
+		cfg, err := buildSearchConfig(codec, preset, metric, evalProf, outRes)
 		if err != nil {
 			return err
 		}
@@ -156,6 +171,8 @@ func registerRun(root *cobra.Command) {
 	f.BoolVar(&headless, "headless", false, "never show any interactive UI (plain logs only)")
 	f.BoolVar(&tui, "tui", false, "show interactive dashboard (falls back to plain logs when stdout is not a terminal)")
 	f.StringVar(&logFile, "log-file", "", "append log output to this file (for unattended runs)")
+	f.StringVar(&evalProf, "eval-profile", domain.DefaultEvalProfileName, "evaluation algorithm+resolution set: hd1080 | uhd4k")
+	f.StringVar(&outRes, "out-res", "native", "output resolution: native or <even>x<even> (e.g. 1280x720)")
 }
 
 // ===== 起動モード判定（memo.md「TUIウィザード化」） =====
@@ -293,7 +310,7 @@ func trialLogger(cfg domain.SearchConfig) engine.Observer {
 
 // buildSearchConfig はCLIフラグ値から探索設定を構築する。
 // metricName は "harmonic" | "mean" | "min"（空は既定harmonic）。
-func buildSearchConfig(codecName, preset, metricName string) (domain.SearchConfig, error) {
+func buildSearchConfig(codecName, preset, metricName, evalProfileName, outResText string) (domain.SearchConfig, error) {
 	c := domain.VideoCodec(codecName)
 	switch c {
 	case domain.CodecH264, domain.CodecHEVC, domain.CodecAV1:
@@ -309,7 +326,19 @@ func buildSearchConfig(codecName, preset, metricName string) (domain.SearchConfi
 		}
 		metric = m
 	}
-	return domain.SearchConfig{
+	evalProfile := domain.DefaultEvalProfile()
+	if evalProfileName != "" && evalProfileName != domain.DefaultEvalProfile().Name {
+		p, err := domain.ResolveEvalProfile(evalProfileName)
+		if err != nil {
+			return domain.SearchConfig{}, err
+		}
+		evalProfile = p
+	}
+	outW, outH, err := domain.ParseOutRes(outResText)
+	if err != nil {
+		return domain.SearchConfig{}, err
+	}
+	cfg := domain.SearchConfig{
 		Codec:       c,
 		MinCRF:      domain.DefaultMinCRF,
 		MaxCRF:      domain.DefaultMaxCRF,
@@ -317,7 +346,14 @@ func buildSearchConfig(codecName, preset, metricName string) (domain.SearchConfi
 		Preset:      preset,
 		BitDepth:    domain.DefaultBitDepth,
 		Metric:      metric,
-	}, nil
+		Eval:        evalProfile,
+		OutWidth:    outW,
+		OutHeight:   outH,
+	}
+	if err := cfg.Validate(); err != nil {
+		return domain.SearchConfig{}, err
+	}
+	return cfg, nil
 }
 
 // runShotDebug は指定シーン1本だけ二分探索を実行するデバッグ用パス。

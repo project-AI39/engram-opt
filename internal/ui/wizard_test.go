@@ -330,6 +330,7 @@ func TestWizardConfirmInvokesFactoryAndTransitions(t *testing.T) {
 		Preset:      "slow",
 		BitDepth:    10,
 		Metric:      domain.MetricMean,
+		Eval:        domain.DefaultEvalProfile(),
 	}
 	if gotCfg != wantCfg || gotAudio != domain.AudioCopy {
 		t.Fatalf("factory cfg/audio = %+v / %s, want %+v / copy", gotCfg, gotAudio, wantCfg)

@@ -79,6 +79,8 @@ const (
 	fMetric
 	fDepth
 	fAudio
+	fEvalProf
+	fOutRes
 	fOutput
 	fieldCount
 )
@@ -99,13 +101,15 @@ type wizardForm struct {
 	minCRF textinput.Model
 	maxCRF textinput.Model
 	target textinput.Model
+	outRes textinput.Model
 
-	codecIdx   int
-	presetList []string // 現在のコーデックに応じた実値リスト（切替時に再構築）
-	presetIdx  int
-	metricIdx  int
-	depthIdx   int
-	audioIdx   int
+	codecIdx       int
+	presetList     []string // 現在のコーデックに応じた実値リスト（切替時に再構築）
+	presetIdx      int
+	metricIdx      int
+	depthIdx       int
+	audioIdx       int
+	evalProfileIdx int
 
 	formErr  string
 	starting bool // Enter連打による二重起動防止
@@ -141,8 +145,17 @@ func newWizardForm(opts Options) wizardForm {
 		out.SetValue(opts.OutputPath)
 	}
 
+	outRes := textinput.New()
+	outRes.Placeholder = "native または 1280x720"
+	outRes.Prompt = ""
+	outRes.CharLimit = 32
+	if opts.OutRes != "" {
+		// --out-res フラグ値を出力解像度欄の初期値へ
+		outRes.SetValue(opts.OutRes)
+	}
+
 	// テキスト入力の見た目（値=明色 / プレースホルダ=薄色）
-	for _, t := range []*textinput.Model{&in, &out} {
+	for _, t := range []*textinput.Model{&in, &out, &outRes} {
 		t.TextStyle = valueStyle
 		t.PlaceholderStyle = dimStyle
 	}
@@ -162,13 +175,15 @@ func newWizardForm(opts Options) wizardForm {
 	}
 
 	w := wizardForm{
-		focus:    fInput,
-		input:    in,
-		output:   out,
-		minCRF:   newNumericInput("15", strconv.Itoa(minC)),
-		maxCRF:   newNumericInput("36", strconv.Itoa(maxC)),
-		target:   newNumericInput("95.0", strconv.FormatFloat(target, 'f', 1, 64)),
-		audioIdx: indexOf(audioLabels(), string(opts.Audio)),
+		focus:          fInput,
+		input:          in,
+		output:         out,
+		minCRF:         newNumericInput("15", strconv.Itoa(minC)),
+		maxCRF:         newNumericInput("36", strconv.Itoa(maxC)),
+		target:         newNumericInput("95.0", strconv.FormatFloat(target, 'f', 1, 64)),
+		audioIdx:       indexOf(audioLabels(), string(opts.Audio)),
+		evalProfileIdx: indexOf(domain.EvalProfileNames(), opts.EvalProfileName),
+		outRes:         outRes,
 	}
 	for _, t := range []*textinput.Model{&w.minCRF, &w.maxCRF, &w.target} {
 		t.TextStyle = valueStyle
@@ -229,18 +244,19 @@ func indexOf(list []string, v string) int {
 
 func (w *wizardForm) isSelectField() bool {
 	return w.focus == fCodec || w.focus == fPreset || w.focus == fMetric ||
-		w.focus == fDepth || w.focus == fAudio
+		w.focus == fDepth || w.focus == fAudio || w.focus == fEvalProf
 }
 
 func (w *wizardForm) isTextField() bool { return !w.isSelectField() }
 
-// preset / metric / depth / audio は現在選択中の実値を返す。
+// preset / metric / depth / audio / evalProfile は現在選択中の実値を返す。
 func (w *wizardForm) preset() string { return w.presetList[w.presetIdx] }
 func (w *wizardForm) metric() domain.ScoreMetric {
 	return metricChoices[w.metricIdx]
 }
 func (w *wizardForm) depth() int              { return depthChoices[w.depthIdx] }
 func (w *wizardForm) audio() domain.AudioMode { return audioChoices[w.audioIdx] }
+func (w *wizardForm) evalProfileName() string { return domain.EvalProfileNames()[w.evalProfileIdx] }
 
 // resetPresetList は現在のCodecに応じてPresetリストを再構築し既定へ戻す。
 // コーデック間でプリセット体系が異なるため、切替時の不正組合せを防ぐ。
@@ -284,6 +300,8 @@ func (m Model) handleSetupKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		w.input, c = w.input.Update(msg)
 	case fOutput:
 		w.output, c = w.output.Update(msg)
+	case fOutRes:
+		w.outRes, c = w.outRes.Update(msg)
 	case fMinCRF:
 		w.minCRF, c = w.minCRF.Update(msg)
 	case fMaxCRF:
@@ -311,6 +329,9 @@ func (m Model) stepField(dir int) (Model, tea.Cmd) {
 		w.depthIdx = mod(w.depthIdx+dir, len(depthChoices))
 	case fAudio:
 		w.audioIdx = mod(w.audioIdx+dir, len(audioChoices))
+	case fEvalProf:
+		names := domain.EvalProfileNames()
+		w.evalProfileIdx = mod(w.evalProfileIdx+dir, len(names))
 	case fMinCRF:
 		stepInt(&w.minCRF, dir, 0, 63)
 	case fMaxCRF:
@@ -337,6 +358,7 @@ func (m Model) stepField(dir int) (Model, tea.Cmd) {
 func (m *Model) syncFocus() {
 	m.wiz.input.Blur()
 	m.wiz.output.Blur()
+	m.wiz.outRes.Blur()
 	m.wiz.minCRF.Blur()
 	m.wiz.maxCRF.Blur()
 	m.wiz.target.Blur()
@@ -345,6 +367,8 @@ func (m *Model) syncFocus() {
 		m.wiz.input.Focus()
 	case fOutput:
 		m.wiz.output.Focus()
+	case fOutRes:
+		m.wiz.outRes.Focus()
 	case fMinCRF:
 		m.wiz.minCRF.Focus()
 	case fMaxCRF:
@@ -416,6 +440,18 @@ func (w *wizardForm) buildConfig() (domain.SearchConfig, error) {
 		BitDepth:    w.depth(),
 		Metric:      w.metric(),
 	}
+	// Eval Profile はcycle選択（未知名になり得ないためResolveエラーは原理的に出ない）
+	if p, err := domain.ResolveEvalProfile(w.evalProfileName()); err != nil {
+		return domain.SearchConfig{}, err
+	} else {
+		cfg.Eval = p
+	}
+	// Out Res はテキスト入力（"native" or WxH）。パース＋偶数検証はdomainへ一元
+	outW, outH, oerr := domain.ParseOutRes(w.outRes.Value())
+	if oerr != nil {
+		return domain.SearchConfig{}, fmt.Errorf("Out Res: %w", oerr)
+	}
+	cfg.OutWidth, cfg.OutHeight = outW, outH
 	if err := cfg.Validate(); err != nil {
 		return domain.SearchConfig{}, err
 	}
@@ -506,7 +542,11 @@ func renderSetup(m Model) string {
 		row("Bit Depth:", w.focus == fDepth,
 			selectValue(fmt.Sprintf("%d (%s)", d, depthLabels[d]), w.focus == fDepth)),
 		row("Audio:", w.focus == fAudio, selectValue(string(audioChoices[w.audioIdx]), w.focus == fAudio)),
+		"", sectionCaption("evaluation"),
+		row("Eval Profile:", w.focus == fEvalProf,
+			selectValue(w.evalProfileName(), w.focus == fEvalProf)),
 		"", sectionCaption("output"),
+		row("Out Res:", w.focus == fOutRes, w.outRes.View()),
 		row("Output:", w.focus == fOutput, w.output.View()),
 	)
 

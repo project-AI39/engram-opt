@@ -23,9 +23,12 @@ type VideoEncoder interface {
 type QualityEvaluator interface {
 	Name() string
 	// Evaluate 元動画の特定区間とエンコード済みチャンクを比較評価する。
+	// profile は使用する評価アルゴリズムと評価解像度のセット
+	// （両入力をこの解像度へ正規化してから比較する）。
 	// workDir は評価ログ等の中間生成物の書き出し先（ジョブ一時領域配下のシーン毎ディレクトリ）。
 	// 失敗時に調査証拠を残せるよう、掃除は実装側の責務で行う。
-	Evaluate(ctx context.Context, originalPath string, scene Scene, encodedChunkPath string, workDir string) (QualityMetrics, error)
+	// 評価に失敗した場合は暗黙の代替モデルへ切り替えずエラーを返す（フェイルファスト）。
+	Evaluate(ctx context.Context, originalPath string, scene Scene, encodedChunkPath string, workDir string, profile EvalProfile) (QualityMetrics, error)
 }
 
 // AudioMuxer 完成映像への音声付与の契約（memo.md「音声処理」）。

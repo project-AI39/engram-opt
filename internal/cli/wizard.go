@@ -28,17 +28,19 @@ func launchWizardMode(ctx context.Context, input, output string, cfg domain.Sear
 	jobDir := newJobDir(tmpRoot)
 
 	opts := ui.Options{
-		InputPath:  input,
-		OutputPath: output,
-		Codec:      cfg.Codec,
-		Preset:     cfg.Preset,
-		Target:     cfg.TargetScore,
-		MinCRF:     cfg.MinCRF,
-		MaxCRF:     cfg.MaxCRF,
-		BitDepth:   cfg.BitDepth,
-		Metric:     string(cfg.EffectiveMetric()),
-		Audio:      string(audio),
-		LogMirror:  logSink,
+		InputPath:       input,
+		OutputPath:      output,
+		Codec:           cfg.Codec,
+		Preset:          cfg.Preset,
+		Target:          cfg.TargetScore,
+		MinCRF:          cfg.MinCRF,
+		MaxCRF:          cfg.MaxCRF,
+		BitDepth:        cfg.BitDepth,
+		Metric:          string(cfg.EffectiveMetric()),
+		EvalProfileName: cfg.Eval.Name,
+		OutRes:          formatOutRes(cfg.OutWidth, cfg.OutHeight),
+		Audio:           string(audio),
+		LogMirror:       logSink,
 	}
 
 	// ファクトリは [Enter] 確定時に呼ばれる。既定出力名の解決と
@@ -113,4 +115,13 @@ func printSummary(input string, r *engine.PipelineReport) {
 			float64(inSize)/(1<<20), float64(outSize)/(1<<20), sign, delta)
 	}
 	log.Printf("[optimize] output: %s (total trials=%d)", r.OutputPath, r.TotalTrials)
+}
+
+// formatOutRes はSearchConfigの出力解像度をウィザード初期値テキストへ変換する。
+// (0,0)はリサイズなし＝"native"。
+func formatOutRes(w, h int) string {
+	if w <= 0 || h <= 0 {
+		return "native"
+	}
+	return fmt.Sprintf("%dx%d", w, h)
 }

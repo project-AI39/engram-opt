@@ -41,7 +41,7 @@ type fakeEvaluator struct {
 
 func (f *fakeEvaluator) Name() string { return "fake-evaluator" }
 
-func (f *fakeEvaluator) Evaluate(_ context.Context, _ string, scene domain.Scene, encodedChunkPath string, _ string) (domain.QualityMetrics, error) {
+func (f *fakeEvaluator) Evaluate(_ context.Context, _ string, scene domain.Scene, encodedChunkPath string, _ string, _ domain.EvalProfile) (domain.QualityMetrics, error) {
 	m := crfInName.FindStringSubmatch(encodedChunkPath)
 	if m == nil {
 		return domain.QualityMetrics{}, fmt.Errorf("cannot parse crf from %q", encodedChunkPath)
@@ -142,7 +142,7 @@ type spreadEvaluator struct{}
 
 func (spreadEvaluator) Name() string { return "spread" }
 
-func (spreadEvaluator) Evaluate(_ context.Context, _ string, _ domain.Scene, encodedChunkPath string, _ string) (domain.QualityMetrics, error) {
+func (spreadEvaluator) Evaluate(_ context.Context, _ string, _ domain.Scene, encodedChunkPath string, _ string, _ domain.EvalProfile) (domain.QualityMetrics, error) {
 	m := crfInName.FindStringSubmatch(encodedChunkPath)
 	if m == nil {
 		return domain.QualityMetrics{}, fmt.Errorf("cannot parse crf from %q", encodedChunkPath)
