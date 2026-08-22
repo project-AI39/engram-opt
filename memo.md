@@ -434,6 +434,8 @@ Output       : [ 空=<入力>.opt.mkv                            ]
 
 ## 設計強化の記録（第2次根本レビュー反映）
 
+- **TUIデザインシステム刷新（Phase 5/7の見た目のみ・挙動は不変）**: `internal/ui/style.go` にテーマを一元化（パレット: バイオレット=ブランド/フォーカス、シアン=進行中、緑/オレンジ/赤=合否/失敗）。部品は角丸パネル（titledPanel/plainPanel）、chip、keyHint、phaseBadge、statBlock。桁揃え規約: **先に `%-*s` パディング→着色**（逆順はANSIエスケープが幅に算入され色違いセルで崩れる。旧実装の潜在バグ）。列幅は `tableCol` をヘッダ/行で共有。テストは非TTYでlipglossがASCIIフォールバックするため全文字列アサートがそのまま成立。
+
 - **キーフレーム方針の転換（2026-08）**: 「IDR先頭のみ」から「先頭IDR必須＋以降はエンコーダー任せ」へ。抑止フラグ廃止の実機検証: フラグ除去だけでx264/x265の既定scenecut(40)が有効化される（赤→青ハードカットでframe60に追加Kを確認）。なおscenecut発火はエンコーダー判断で、testsrc2→smptebars遷移はh264が発火・x265が不発という差異も実測（統合テストはコーデック毎に適切な信号源を使用）。SVT-AV1(scd)は小さいフィクスチャでは発火せず。
 
 - **出力=入力同一パスの禁止**: `engine.RequireDistinctPaths` をorchestrator入口とウィザードファクトリで検証（Windowsは大小文字同一視）。結合はconcat demuxer経由のためffmpeg自己保護が発火せず、無検証だと`-c copy`が元動画をexit 0で上書きする。

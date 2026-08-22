@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/charmbracelet/lipgloss"
+
+	"engram-opt/internal/engine"
 )
 
 // View は現在のステージに応じた画面を描画する。
@@ -22,58 +26,90 @@ func (m Model) View() string {
 	}
 }
 
+// ===== 実行ダッシュボード =====
+
 // renderDashboard は実行中ダッシュボードを描画する。
 //
-//	ヘッダ（入出力・設定）
-//	全体進捗バー＋経過時間
+//	ヘッダ（ブランド＋フェーズバッジ＋スピナー）
+//	設定パネル（in/out パスとエンコード構成のチップ）
+//	進捗バー＋統計チップ
 //	シーン一覧テーブル
-//	ログテール
+//	ログパネル
 //	フッタ
 func (m Model) renderDashboard() string {
 	var b strings.Builder
 
-	b.WriteString(titleStyle.Render("engram optimizer") + "  " +
-		dimStyle.Render(shorten(m.opts.InputPath, 30)+" -> "+shorten(m.opts.OutputPath, 30)))
-	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("codec=%s preset=%s target=%.1f", m.opts.Codec, m.opts.Preset, m.opts.Target))
+	// ヘッダ
+	head := lipgloss.JoinHorizontal(lipgloss.Center,
+		brandHeader("optimizer"), "  ", m.phaseBadge())
+	b.WriteString(head + "\n")
+
+	// 設定パネル
+	cfgChips := []string{
+		chip("codec ", string(m.opts.Codec)),
+		chip("preset ", m.opts.Preset),
+		chip("target ", fmt.Sprintf("%.1f", m.opts.Target)),
+	}
+	if m.opts.BitDepth != 0 {
+		cfgChips = append(cfgChips, chip("depth ", fmt.Sprintf("%d-bit", m.opts.BitDepth)))
+	}
 	if m.opts.Audio != "" {
-		b.WriteString(fmt.Sprintf(" audio=%s", m.opts.Audio))
+		cfgChips = append(cfgChips, chip("audio ", m.opts.Audio))
 	}
-	b.WriteString("\n\n")
+	info := lipgloss.JoinVertical(lipgloss.Left,
+		chipKeyStyle.Render("in ")+valueStyle.Render(shorten(m.opts.InputPath, 42))+
+			dimStyle.Render("  →  ")+
+			chipKeyStyle.Render("out ")+valueStyle.Render(shorten(m.opts.OutputPath, 42)),
+		strings.Join(cfgChips, dimStyle.Render(" · ")),
+	)
+	b.WriteString(plainPanel(info) + "\n\n")
 
-	// 全体進捗
-	b.WriteString(fmt.Sprintf("%-14s %s\n", m.phaseLabel(), m.progress.View()))
-	b.WriteString(fmt.Sprintf("scenes %d/%d done · trials %d · elapsed %s\n",
-		m.doneCount, maxInt(m.total, 0), m.trialCount, formatDuration(m.elapsed)))
-
+	// 失敗バナー（パイプライン継続中にエラー確定した場合）
 	if m.phase == phaseFailed {
-		b.WriteString("\n" + failStyle.Render("FAILED: "+errText(m.err)) + "\n")
+		failBox := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(cRed).
+			Padding(0, 1).
+			Render(failStyle.Render("✗ FAILED  ") + valueStyle.Render(errText(m.err)))
+		b.WriteString(failBox + "\n\n")
 	}
+
+	// 進捗バー＋統計
+	b.WriteString(m.progress.View() + "\n")
+	statLine := strings.Join([]string{
+		chip("shots ", fmt.Sprintf("%d/%d", m.doneCount, maxInt(m.total, 0))),
+		chip("trials ", fmt.Sprint(m.trialCount)),
+		chip("elapsed ", formatDuration(m.elapsed)),
+	}, dimStyle.Render("  "))
+	b.WriteString(statLine + "\n")
 
 	// シーン一覧
 	if m.total > 0 {
-		b.WriteString("\n" + headerStyle.Render("SHOT  FRAMES       STATUS  CRF   VMAF(harm)  LAST") + "\n")
+		b.WriteString("\n" + m.sectionTitle("SHOTS") + "\n")
+		b.WriteString(dashboardHeaderRow() + "\n")
 		for _, sc := range m.scenes {
 			row := sceneRow{index: sc.Index, start: sc.StartFrame, end: sc.EndFrame}
 			b.WriteString(m.renderRow(row) + "\n")
 		}
 	}
 
-	// ログテール
+	// ログパネル
 	if len(m.logs) > 0 {
-		b.WriteString("\n" + headerStyle.Render("-- log --") + "\n")
+		lines := make([]string, 0, len(m.logs))
 		for _, l := range m.logs {
-			b.WriteString(dimStyle.Render(truncate(l, m.width-2)) + "\n")
+			lines = append(lines, logStyle.Render(truncate(l, maxInt(10, m.width-6))))
 		}
+		b.WriteString("\n" + titledPanel("log", strings.Join(lines, "\n")) + "\n")
 	}
 
+	// フッタ
 	switch m.phase {
 	case phaseDone:
-		b.WriteString("\n" + hitStyle.Render("completed: "+m.opts.OutputPath) + "\n")
+		b.WriteString("\n" + hitStyle.Render("✓ completed: ") + valueStyle.Render(m.opts.OutputPath) + "\n")
 	case phaseFailed:
 		b.WriteString("\n" + dimStyle.Render("temp files kept for inspection (see log above)") + "\n")
 	default:
-		b.WriteString("\n" + dimStyle.Render("[q] quit (running pipeline will be cancelled)") + "\n")
+		b.WriteString("\n" + keyHint("q", "quit (running pipeline will be cancelled)") + "\n")
 	}
 	return b.String()
 }
@@ -83,60 +119,97 @@ type sceneRow struct {
 	start, end int64
 }
 
+// ダッシュボードテーブルの列幅（ヘッダと行で共有）。
+// 各幅に列間ギャップを含めるため、結合はセパレータ無しで行う。
+type tableCol struct {
+	w     int
+	label string
+}
+
+var dashCols = []tableCol{
+	{7, "SHOT"}, {14, "FRAMES"}, {8, "STATUS"}, {6, "CRF"}, {12, "VMAF(harm)"}, {6, "LAST"},
+}
+
+func renderTableHeader(cols []tableCol) string {
+	cells := make([]string, 0, len(cols))
+	for _, c := range cols {
+		cells = append(cells, fmt.Sprintf("%-*s", c.w, c.label))
+	}
+	return headerStyle.Render(strings.Join(cells, ""))
+}
+
+func dashboardHeaderRow() string {
+	return renderTableHeader(dashCols)
+}
+
 // renderRow は1シーン分の行を描画する。
 // STATUS は状態アイコン、LAST は直近試行の合否（確定後は試行回数）を表示する。
+// 各セルは「先に固定幅へパディングしてから着色」する——逆順だとANSIエスケープが
+// パディング幅に算入され、色違いのセルで桁が揃わなくなる。
 func (m Model) renderRow(r sceneRow) string {
 	st := m.shots[r.index]
 	if st == nil {
 		return ""
 	}
-	statusCell := pendStyle.Render(st.status.icon())
-	crfCell := "-"
-	harmCell := "-"
-	lastCell := "-"
+
+	statusCell := cell(8, st.status.icon(), pendStyle)
+	crfCell := cell(6, "-", pendStyle)
+	harmCell := cell(12, "-", pendStyle)
+	lastCell := cell(6, "-", pendStyle)
+	idxCell := cell(7, fmt.Sprint(r.index), valueStyle)
+	framesCell := cell(14, fmt.Sprintf("%d-%d", r.start, r.end), dimStyle)
 
 	switch st.status {
+	case shotPending:
+		framesCell = cell(14, fmt.Sprintf("%d-%d", r.start, r.end), pendStyle)
 	case shotRunning:
-		statusCell = runStyle.Render(st.status.icon())
+		statusCell = cell(8, st.status.icon(), runStyle)
+		idxCell = cell(7, fmt.Sprint(r.index), runStyle)
 		if st.last != nil {
 			t := *st.last
-			crfCell = fmt.Sprintf("%d", t.CRF)
-			harmCell = fmt.Sprintf("%.2f", t.Metrics.HarmonicMean)
+			crfCell = cell(6, fmt.Sprint(t.CRF), valueStyle)
+			harmCell = cell(12, fmt.Sprintf("%.2f", t.Metrics.HarmonicMean), valueStyle)
 			if t.MetTarget {
-				lastCell = hitStyle.Render("HIT")
+				lastCell = cell(6, "HIT", hitStyle)
 			} else {
-				lastCell = missStyle.Render("MISS")
+				lastCell = cell(6, "MISS", missStyle)
 			}
 		}
 	case shotDone:
-		statusCell = hitStyle.Render(st.status.icon())
 		res := st.result
-		crfCell = fmt.Sprintf("%d", res.CRF)
-		harmCell = fmt.Sprintf("%.2f", res.Metrics.HarmonicMean)
-		lastCell = fmt.Sprintf("%d", res.Trials)
+		metColor := hitStyle
 		if !res.MetTarget {
-			statusCell = missStyle.Render(st.status.icon())
+			metColor = missStyle
 		}
+		statusCell = cell(8, st.status.icon(), metColor)
+		crfCell = cell(6, fmt.Sprint(res.CRF), valueStyle)
+		harmCell = cell(12, fmt.Sprintf("%.2f", res.Metrics.HarmonicMean), metColor)
+		lastCell = cell(6, fmt.Sprint(res.Trials), dimStyle)
 	case shotFailed:
-		statusCell = failStyle.Render(st.status.icon())
+		statusCell = cell(8, st.status.icon(), failStyle)
 	}
 
-	return fmt.Sprintf("%-5d %-11s  %-6s %-5s %-10s  %s",
-		r.index,
-		fmt.Sprintf("%d-%d", r.start, r.end),
-		statusCell,
-		crfCell,
-		harmCell,
-		lastCell,
-	)
+	return strings.Join([]string{idxCell, framesCell, statusCell, crfCell, harmCell, lastCell}, "")
 }
 
-func (m Model) phaseLabel() string {
-	label := "[" + m.phase.String() + "]"
-	if m.phase == phaseDetecting || m.phase == phaseConcat || m.runningAny() {
-		label += " " + m.spinner.View()
+// sectionTitle は「▌ LABEL ─────」形式の節見出し。
+func (m Model) sectionTitle(label string) string {
+	w := maxInt(0, m.width-lipgloss.Width(label)-4)
+	bar := lipgloss.NewStyle().Bold(true).Foreground(cPrimary).Render("▌ ")
+	lbl := lipgloss.NewStyle().Bold(true).Foreground(cMuted).Render(label + " ")
+	rule := lipgloss.NewStyle().Foreground(cBorder).Render(strings.Repeat("─", w))
+	return bar + lbl + rule
+}
+
+// phaseBadge は進行フェーズの色付きバッジ（稼働中はスピナーを伴う）。
+func (m Model) phaseBadge() string {
+	badge := phaseBadge(m.phase)
+	switch {
+	case m.phase == phaseDetecting || m.phase == phaseConcat || m.runningAny():
+		return badge + " " + m.spinner.View()
+	default:
+		return badge
 	}
-	return label
 }
 
 func (m Model) runningAny() bool {
@@ -147,6 +220,8 @@ func (m Model) runningAny() bool {
 	}
 	return false
 }
+
+// ===== 共通ユーティリティ =====
 
 // shorten は長いパスを中略表示する。
 func shorten(p string, max int) string {
@@ -197,31 +272,39 @@ func maxInt(a, b int) int {
 	return b
 }
 
+// ===== 完了サマリー =====
+
 // renderSummary は完了サマリーを描画する（memo.md「TUIウィザード化」）。
-// 出力先／サイズ削減率／シーン別採用CRF一覧／達成率を表示し、キー入力で終了を待つ。
+// 成功バナー、統計カード、シーン別採用CRF一覧、出力先を表示しキー入力で待つ。
 func (m Model) renderSummary() string {
 	r := m.report
 	var b strings.Builder
 
-	b.WriteString(titleStyle.Render("処理が完了しました") + "\n\n")
-	if r != nil {
-		b.WriteString(fmt.Sprintf("出力先: %s\n", r.OutputPath))
-	}
+	b.WriteString(brandHeader("summary") + "\n\n")
 
-	// サイズ削減（実ファイル計測に成功した場合のみ）
+	// 成功バナー
+	banner := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(cGreen).
+		Padding(0, 2).
+		Render(lipgloss.NewStyle().Bold(true).Foreground(cGreen).Render("✓ 処理が完了しました"))
+	b.WriteString(banner + "\n\n")
+
+	// 統計カード（サイズ / 達成 / 実行）
+	cards := []string{}
 	if m.inSize > 0 && m.outSize > 0 {
 		delta := 100 * (1 - float64(m.outSize)/float64(m.inSize))
-		sign := "-"
+		sign, color := "-", cGreen
 		if delta < 0 {
 			// 大きくなった場合は増加として正直に表示する
-			sign = "+"
-			delta = -delta
+			sign, color = "+", cAmber
 		}
-		b.WriteString(fmt.Sprintf("サイズ: %.2f MB → %.2f MB (%s)\n",
-			float64(m.inSize)/(1<<20), float64(m.outSize)/(1<<20),
-			hitStyle.Render(fmt.Sprintf("%s%.1f%%", sign, delta))))
+		sizeVal := lipgloss.NewStyle().Bold(true).Foreground(color).
+			Render(fmt.Sprintf("%s%.1f%%", sign, delta))
+		detail := dimStyle.Render(fmt.Sprintf("%.1f→%.1f MB",
+			float64(m.inSize)/(1<<20), float64(m.outSize)/(1<<20)))
+		cards = append(cards, statBlock("SIZE", sizeVal+"  "+detail))
 	}
-
 	if r != nil && len(r.Results) > 0 {
 		met := 0
 		for _, res := range r.Results {
@@ -229,25 +312,56 @@ func (m Model) renderSummary() string {
 				met++
 			}
 		}
-		b.WriteString(fmt.Sprintf("達成: %s / 全 %d shot · 試行 %d 回 · 所要 %s\n\n",
-			hitStyle.Render(fmt.Sprintf("%d", met)), len(r.Results),
-			r.TotalTrials, formatDuration(m.elapsed)))
+		metVal := hitStyle.Render(fmt.Sprintf("%d", met)) +
+			dimStyle.Render(fmt.Sprintf("/%d shots", len(r.Results)))
+		cards = append(cards, statBlock("QUALITY", metVal))
+	}
+	runVal := chipValStyle.Render(fmt.Sprint(totalTrials(r, m.trialCount))) +
+		dimStyle.Render(" trials · ") + valueStyle.Render(formatDuration(m.elapsed))
+	cards = append(cards, statBlock("RUN", runVal))
 
-		b.WriteString(headerStyle.Render("SHOT  FRAMES       CRF   VMAF(harm)  MET") + "\n")
-		for _, res := range r.Results {
-			metCell := missStyle.Render("MISS")
-			if res.MetTarget {
-				metCell = hitStyle.Render("HIT ")
-			}
-			b.WriteString(fmt.Sprintf("%-5d %-12s %-5d %-10.2f  %s\n",
-				res.Scene.Index,
-				fmt.Sprintf("%d-%d", res.Scene.StartFrame, res.Scene.EndFrame),
-				res.CRF, res.Metrics.HarmonicMean, metCell))
-		}
-	} else {
-		b.WriteString(fmt.Sprintf("\n試行 %d 回 · 所要 %s\n", m.trialCount, formatDuration(m.elapsed)))
+	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, cards...) + "\n")
+
+	// 出力先
+	if r != nil {
+		b.WriteString("\n" + chipKeyStyle.Render("output ") + valueStyle.Render(r.OutputPath) + "\n")
 	}
 
-	b.WriteString("\n" + dimStyle.Render("[Enter / q] 終了") + "\n")
+	// 結果テーブル
+	if r != nil && len(r.Results) > 0 {
+		b.WriteString("\n" + m.sectionTitle("RESULTS") + "\n")
+		cols := []tableCol{{7, "SHOT"}, {14, "FRAMES"}, {6, "CRF"}, {12, "VMAF(harm)"}, {6, "MET"}}
+		b.WriteString(renderTableHeader(cols) + "\n")
+		for _, res := range r.Results {
+			metSt := missStyle
+			metTxt := "MISS"
+			if res.MetTarget {
+				metSt = hitStyle
+				metTxt = "HIT "
+			}
+			row := strings.Join([]string{
+				cell(7, fmt.Sprint(res.Scene.Index), valueStyle),
+				cell(14, fmt.Sprintf("%d-%d", res.Scene.StartFrame, res.Scene.EndFrame), dimStyle),
+				cell(6, fmt.Sprint(res.CRF), valueStyle),
+				cell(12, fmt.Sprintf("%.2f", res.Metrics.HarmonicMean), valueStyle),
+				cell(6, metTxt, metSt),
+			}, "")
+			b.WriteString(row + "\n")
+		}
+	} else {
+		b.WriteString(fmt.Sprintf("\n%s %s\n",
+			chip("trials ", fmt.Sprint(m.trialCount)),
+			chip("elapsed ", formatDuration(m.elapsed))))
+	}
+
+	b.WriteString("\n" + keyHint("Enter", "終了") + "  " + keyHint("q", "終了") + "\n")
 	return b.String()
+}
+
+// totalTrials はレポートがあればその合計試行数を、無ければ実測カウントを返す。
+func totalTrials(r *engine.PipelineReport, fallback int) int {
+	if r != nil {
+		return r.TotalTrials
+	}
+	return fallback
 }

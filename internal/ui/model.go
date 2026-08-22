@@ -13,7 +13,6 @@ import (
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"engram-opt/internal/domain"
 	"engram-opt/internal/engine"
@@ -168,6 +167,7 @@ func NewModel(opts Options) Model {
 // newModel は指定ステージで Model を初期化する。
 func newModel(opts Options, st stage) Model {
 	sp := spinner.New(spinner.WithSpinner(spinner.Dot))
+	sp.Style = spinnerStyle
 	pr := progress.New(progress.WithDefaultGradient())
 	pr.Width = 44
 	m := Model{
@@ -202,16 +202,3 @@ func (m *Model) pushLog(line string) {
 		m.logs = m.logs[len(m.logs)-m.logCap:]
 	}
 }
-
-// ===== スタイル（view.go と共有） =====
-
-var (
-	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
-	dimStyle    = lipgloss.NewStyle().Faint(true)
-	hitStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("46"))
-	missStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-	runStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
-	pendStyle   = lipgloss.NewStyle().Faint(true)
-	failStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Bold(true)
-	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("245"))
-)

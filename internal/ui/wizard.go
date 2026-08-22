@@ -12,7 +12,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"engram-opt/internal/domain"
 	"engram-opt/internal/engine"
@@ -117,11 +116,19 @@ func newWizardForm(opts Options) wizardForm {
 	in := textinput.New()
 	in.Placeholder = "例: C:\\Videos\\input.mp4 （D&Dでパスを貼り付け可）"
 	in.Prompt = ""
+	in.CharLimit = 260
 	in.Focus()
 
 	out := textinput.New()
 	out.Placeholder = "空欄= <入力名>.opt.mkv"
 	out.Prompt = ""
+	out.CharLimit = 260
+
+	// テキスト入力の見た目（値=明色 / プレースホルダ=薄色）
+	for _, t := range []*textinput.Model{&in, &out} {
+		t.TextStyle = valueStyle
+		t.PlaceholderStyle = dimStyle
+	}
 
 	// 数値フィールドはOptions由来の初期値（0は未指定扱いでドメイン既定へ）
 	minC := opts.MinCRF
@@ -145,6 +152,10 @@ func newWizardForm(opts Options) wizardForm {
 		maxCRF:   newNumericInput("36", strconv.Itoa(maxC)),
 		target:   newNumericInput("95.0", strconv.FormatFloat(target, 'f', 1, 64)),
 		audioIdx: indexOf(audioLabels(), string(opts.Audio)),
+	}
+	for _, t := range []*textinput.Model{&w.minCRF, &w.maxCRF, &w.target} {
+		t.TextStyle = valueStyle
+		t.PlaceholderStyle = dimStyle
 	}
 	for i, c := range codecChoices {
 		if c == opts.Codec {
@@ -425,60 +436,66 @@ type setupErrorMsg struct{ err error }
 
 // ===== setupフェーズの描画 =====
 
-var (
-	selActiveStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
-	errBoxStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
-)
-
 // renderSetup は設定ウィザード画面を描画する。
+// 項目の並びはタブ移動順（fInput→fOutput）と一致させる。視覚的な小節キャプション
+// （source / encode / output）は順序を変えない装飾として挟む。
 func renderSetup(m Model) string {
 	w := &m.wiz
 
+	const labelW = 13
 	row := func(label string, focused bool, content string) string {
-		cursor := "  "
-		if focused {
-			cursor = "> "
-			content = selActiveStyle.Render(content)
-		} else if content == "" {
+		padded := fmt.Sprintf("%-*s", labelW, label)
+		if content == "" && !focused {
 			content = dimStyle.Render("(未設定)")
 		}
-		return fmt.Sprintf(" %-13s%s %s", label, cursor, content)
+		if focused {
+			return accentBar() + focusLabelStyle.Render(padded) + " " + selActiveStyle.Render(content)
+		}
+		return "  " + labelStyle.Render(padded) + " " + valueStyle.Render(content)
 	}
 
-	var b strings.Builder
-	b.WriteString(titleStyle.Render("engram opt - エンコード設定") + "\n\n")
-
-	b.WriteString(row("入力ファイル:", w.focus == fInput, w.input.View()))
-	b.WriteString("\n")
-	b.WriteString(row("Codec:", w.focus == fCodec,
-		fmt.Sprintf("< %s >", string(codecChoices[w.codecIdx]))))
-	b.WriteString("\n")
-	b.WriteString(row("Preset:", w.focus == fPreset,
-		fmt.Sprintf("< %s >", w.preset())))
-	b.WriteString("\n")
-	b.WriteString(row("Min CRF:", w.focus == fMinCRF, w.minCRF.View()))
-	b.WriteString("\n")
-	b.WriteString(row("Max CRF:", w.focus == fMaxCRF, w.maxCRF.View()))
-	b.WriteString("\n")
-	b.WriteString(row("Target VMAF:", w.focus == fTarget, w.target.View()))
-	b.WriteString("\n")
+	var rows []string
+	rows = append(rows, row("入力ファイル", w.focus == fInput, w.input.View()))
+	rows = append(rows, "", sectionCaption("encode"))
+	rows = append(rows,
+		row("Codec:", w.focus == fCodec, selectValue(string(codecChoices[w.codecIdx]), w.focus == fCodec)),
+		row("Preset:", w.focus == fPreset, selectValue(w.preset(), w.focus == fPreset)),
+		row("Min CRF:", w.focus == fMinCRF, w.minCRF.View()),
+		row("Max CRF:", w.focus == fMaxCRF, w.maxCRF.View()),
+		row("Target VMAF:", w.focus == fTarget, w.target.View()),
+	)
 	d := w.depth()
-	b.WriteString(row("Bit Depth:", w.focus == fDepth,
-		fmt.Sprintf("< %d (%s) >", d, depthLabels[d])))
-	b.WriteString("\n")
-	b.WriteString(row("Audio:", w.focus == fAudio,
-		fmt.Sprintf("< %s >", audioChoices[w.audioIdx])))
-	b.WriteString("\n")
-	b.WriteString(row("Output:", w.focus == fOutput, w.output.View()))
-	b.WriteString("\n")
+	rows = append(rows,
+		row("Bit Depth:", w.focus == fDepth,
+			selectValue(fmt.Sprintf("%d (%s)", d, depthLabels[d]), w.focus == fDepth)),
+		row("Audio:", w.focus == fAudio, selectValue(string(audioChoices[w.audioIdx]), w.focus == fAudio)),
+		"", sectionCaption("output"),
+		row("Output:", w.focus == fOutput, w.output.View()),
+	)
+
+	body := strings.Join(rows, "\n")
+
+	var b strings.Builder
+	b.WriteString(brandHeader("セットアップ") + "\n\n")
+	b.WriteString(titledPanel("設定", body) + "\n")
 
 	if w.formErr != "" {
-		b.WriteString("\n" + errBoxStyle.Render("× "+w.formErr) + "\n")
+		b.WriteString("\n" + errorBox(w.formErr) + "\n")
 	}
 
 	b.WriteString("\n" + dimStyle.Render(
 		"※ 既定値のままであれば従来の固定仕様と同一の挙動。Target VMAF は harmonic_mean 基準") + "\n")
-	b.WriteString(dimStyle.Render(
-		"[Tab/↑↓] 項目移動  [←→] 変更  [Enter] 最適化開始  [Esc/Ctrl+C] 終了") + "\n")
+	b.WriteString(strings.Join([]string{
+		keyHint("Tab/↑↓", "項目移動"),
+		keyHint("←→", "変更"),
+		keyHint("Enter", "最適化開始"),
+		keyHint("Esc", "終了"),
+	}, "  ") + "\n")
 	return b.String()
+}
+
+// selectValue は選択系フィールドの "< 値 >" 表現（矢印をアクセント色で強調）。
+func selectValue(v string, focused bool) string {
+	open, close := selectArrows(focused)
+	return open + v + close
 }
