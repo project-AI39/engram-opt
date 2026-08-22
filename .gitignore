@@ -10,3 +10,10 @@ build/
 
 # 実動画テスト用（ローカル限定）
 /test.webm
+
+# 実動画テストの生成物
+/*.opt.mkv
+/testrun.log
+
+# 手元生成のテスト動画フィクスチャ（Gitコミット禁止方針）
+/testdata/
