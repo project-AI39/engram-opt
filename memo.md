@@ -14,12 +14,12 @@
 # 自動環境構築
 
 ## 仕組み
-- Go言語製のセットアップコマンド（本体CLI `cmd/engram` の `setup` サブコマンド、実体は `internal/setup`）を使用し、実行環境のOS（Windows / macOS / Linux）およびアーキテクチャ（amd64 / arm64）を自動判別。
+- Go言語製のセットアップコマンド（本体CLI `cmd/engram-setup`（開発者専用バイナリ・ランタイムから分離）、実体は `internal/setup`）を使用し、実行環境のOS（Windows / macOS / Linux）およびアーキテクチャ（amd64 / arm64）を自動判別。
 - シェルを経由しないクロスプラットフォーム構築を実現。ダウンロード・外部コマンド実行はGo標準ライブラリ（`net/http`, `os/exec`）で直接実行し、アーカイブ展開のみ純Goライブラリ [`mholt/archives`](https://github.com/mholt/archives) を使用（旧archiverのメンテされる後継。標準ライブラリ非対応の xz / 7z も展開可能）：
   1. 各OS向けFFmpeg静的ビルドバイナリの自動ダウンロード＆展開
   2. Rust製ツール（`av-scenechange`）のローカルコンパイル（`cargo build --release`）
   3. パーミッション設定（Unix系: `0755`）および拡張子制御（Windows: `.exe`）
-- ローカル開発環境とCI/CD（GitHub Actions）で同一の `go run ./cmd/engram setup` を実行し、環境差異（Dev-CI Parity）を完全に排除。
+- ローカル開発環境とCI/CD（GitHub Actions）で同一の `go run ./cmd/engram-setup` を実行し、環境差異（Dev-CI Parity）を完全に排除。
 
 ## バージョンpin（実装済み）
 
@@ -259,7 +259,7 @@ internal/
        └── orchestrator.go        # 全体フロー制御の司令塔＋build/tmp管理
 ```
 
-- 既存のスタンドアロンsetupコマンドはPhase 1でcobra配下へ移管済み（`go run ./cmd/engram setup`）。
+- 既存のスタンドアロンsetupコマンドはPhase 1でcobra配下へ移管済み（`go run ./cmd/engram-setup`）。
 
 ## 共通データ契約（domain）
 
@@ -433,6 +433,11 @@ Output       : [ 空=<入力>.opt.mkv                            ]
 - 実装上の要点: ①tea.Program生成前にModelへ `sender` 間接層（ポインタレシーバ）を埋め込み、生成後の prog.Send 差し替えに対応 ②値レシーバのUpdate内でフォーム状態を変更する箇所は「更新後のModelを返す」パターンで統一（confirmWizard等） ③Enter連打によるパイプライン二重起動は `wiz.starting` フラグで防止 ④TTY判定はstdlib完結（`os.Stdout.Stat()`+`ModeCharDevice`）を `ui.IsTerminal()` として公開
 
 ## 設計強化の記録（第2次根本レビュー反映）
+
+- **CLI構成の再編（2026-08）**:
+  - `optimize` サブコマンドを廃止。入力動画はrootの位置引数で直接受ける（`engram-opt <input>` で即実行、引数なし＋端末ならウィザード）。単一目的ツールにサブコマンド層は不要
+  - setupを開発者専用バイナリ **`cmd/engram-setup`** へ分離。ランタイム本体 `cmd/engram-opt` からダウンロード/展開機能を排除（出番ゼロの死に重量と攻撃面の削減）。利用者のZipにはbin/同梱済みのためsetup不要
+  - Dev-CI Parityは `go run ./cmd/engram-setup` を維持
 
 - **TUIデザインシステム刷新（Phase 5/7の見た目のみ・挙動は不変）**: `internal/ui/style.go` にテーマを一元化（パレット: バイオレット=ブランド/フォーカス、シアン=進行中、緑/オレンジ/赤=合否/失敗）。部品は角丸パネル（titledPanel/plainPanel）、chip、keyHint、phaseBadge、statBlock。桁揃え規約: **先に `%-*s` パディング→着色**（逆順はANSIエスケープが幅に算入され色違いセルで崩れる。旧実装の潜在バグ）。列幅は `tableCol` をヘッダ/行で共有。テストは非TTYでlipglossがASCIIフォールバックするため全文字列アサートがそのまま成立。
 

@@ -29,7 +29,7 @@ func RequireBinaries(t testing.TB, names ...string) {
 	}
 	for _, n := range names {
 		if _, err := toolbin.Resolve(n); err != nil {
-			t.Skipf("binary %q unavailable (%v); run 'go run ./cmd/engram setup' first", n, err)
+			t.Skipf("binary %q unavailable (%v); run 'go run ./cmd/engram-setup' first", n, err)
 		}
 	}
 }
@@ -44,7 +44,7 @@ func GenerateSampleVideo(t testing.TB, dir string) string {
 	t.Helper()
 	ffmpegPath, err := toolbin.Resolve("ffmpeg")
 	if err != nil {
-		t.Skipf("ffmpeg unavailable (%v); run 'go run ./cmd/engram setup' first", err)
+		t.Skipf("ffmpeg unavailable (%v); run 'go run ./cmd/engram-setup' first", err)
 	}
 	out := filepath.Join(dir, "sample.mp4")
 	filter := "testsrc2=size=320x240:rate=30:duration=2[a];" +

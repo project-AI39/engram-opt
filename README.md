@@ -27,7 +27,7 @@
 
 ```console
 engram-opt.exe                       ← 設定ウィザードが起動（ダブルクリックOK）
-engram-opt.exe optimize 入力動画.mp4  ← そのまま即実行
+engram-opt.exe 入力動画.mp4  ← そのまま即実行
 ```
 
 完了すると入力と同じ場所に `<入力名>.opt.mkv` が出力される。
@@ -37,8 +37,8 @@ engram-opt.exe optimize 入力動画.mp4  ← そのまま即実行
 | 起動方法 | 動作 |
 |---|---|
 | 引数なしで起動（ダブルクリック含む）＋端末 | **設定ウィザード**（入力パス／Codec／Preset実値／Min・Max CRF／Target VMAF／Bit Depth／Audio／Output を選んでEnter。全項目に既定値を事前入力済み） |
-| 端末で `optimize 入力.mp4` | 即実行（平文ログ） |
-| `optimize 入力.mp4 --tui` | ダッシュボード表示で実行 |
+| 端末で `engram-opt.exe 入力.mp4` | 即実行（平文ログ） |
+| `engram-opt.exe 入力.mp4 --tui` | ダッシュボード表示で実行 |
 | パイプ／CI／リダイレクト環境 | 常に平文ログで即実行（`--tui` は無視される） |
 | `--headless` | 対話UIを一切出さないことを明示（`--tui` と排他） |
 
@@ -54,8 +54,8 @@ engram-opt.exe optimize 入力動画.mp4  ← そのまま即実行
 | Git | ソース取得 |
 
 ```console
-go run ./cmd/engram setup        # 依存バイナリ導入（冪等・初回のみ数分）
-go run ./cmd/engram optimize 入力動画.mp4
+go run ./cmd/engram-setup        # 依存バイナリ導入（冪等・初回のみ数分）
+go run ./cmd/engram-opt 入力動画.mp4
 ```
 
 setupの内容: FFmpeg 8.1.2 full build をGitHubリリースからダウンロード（SHA256照合）→
@@ -63,11 +63,14 @@ setupの内容: FFmpeg 8.1.2 full build をGitHubリリースからダウンロ�
 最後に ffmpeg/ffprobe の起動、libvmafフィルタ、必須エンコーダ3種
 （libx264/libx265/libsvtav1）の存在を検証する。
 
+> `engram-setup` は開発者専用ツールで、配布Zipには含まれません
+> （利用者のZipには `bin/` が同梱済みのためセットアップは不要です）。
+
 ---
 
 ## コマンドリファレンス
 
-### `engram optimize <input>`
+### `engram-opt <input>`
 
 | フラグ | 既定 | 説明 |
 |---|---|---|
@@ -101,7 +104,7 @@ setupの内容: FFmpeg 8.1.2 full build をGitHubリリースからダウンロ�
 （チャンク境界での音声切断によるノイズが構造的に発生しない）。元動画に
 音声がない場合は全モードで映像のみ出力する。
 
-### `engram setup`
+### `engram-setup`（開発者専用・配布物外）
 
 依存バイナリの導入・検証。**冪等**で、導入済みなら検証のみ実行する。
 壊れた場合は `build/bin/` の該当バイナリを消して再実行すれば再取得される。
@@ -193,7 +196,7 @@ SHOT  FRAMES       CRF   VMAF(harm)  MET
 長い動画の全体実行前に、まず1シーンだけで挙動を確認できる:
 
 ```console
-engram-opt.exe optimize input.mp4 --shot 0
+engram-opt.exe input.mp4 --shot 0
 ```
 
 結合せず勝利CRFのチャンク（`.mkv`）を保持し、パスをログに出す。チャンクは
@@ -204,7 +207,7 @@ tmp配下に残るので再生して品質を目視確認した後、手動で�
 ## 無人実行（1日単位の運用）
 
 ```console
-engram-opt.exe optimize long_video.mp4 --codec av1 --tui --log-file run.log
+engram-opt.exe long_video.mp4 --codec av1 --tui --log-file run.log
 ```
 
 - `--log-file` は追記モード。TUI表示中も書き込みは継続する（画面には出ない）
@@ -214,7 +217,7 @@ engram-opt.exe optimize long_video.mp4 --codec av1 --tui --log-file run.log
 
 | 症状 | 対処 |
 |---|---|
-| `binary "ffmpeg" not found; run 'go run ./cmd/engram setup' first` | 開発時: setupを実行。配布版: 本体と `bin/` の位置関係を確認（フォルダ構造維持） |
+| `binary "ffmpeg" not found; run 'go run ./cmd/engram-setup' first` | 開発時: setupを実行。配布版: 本体と `bin/` の位置関係を確認（フォルダ構造維持） |
 | `output path ... must be outside the temp dir` | `--out` が tmp 配下。別の場所を指定する |
 | `unknown preset "..." for av1/libsvtav1` | AV1のpresetは名称または数値で指定する |
 | `total frame count mismatch` / `frame count mismatch in evaluation` | 入力メタデータと実データの不一致（fail-fast設計）。入力ファイルを確認する |
@@ -232,7 +235,7 @@ engram-opt.exe optimize long_video.mp4 --codec av1 --tui --log-file run.log
 go run ./cmd/engram-package
 
 # 開発時のクイックビルドのみ
-go build -o build/engram-opt.exe ./cmd/engram
+go build -o build/engram-opt.exe ./cmd/engram-opt
 ```
 
 `build/` は配布Zipと同一構造のステージング領域という規約。パッケージャーは
@@ -257,9 +260,10 @@ go test ./internal/... ./test/...           # フル検証（約1〜2分。事�
 設計の唯一の情報源は `memo.md`（モジュール構成・固定仕様・実測知見）。
 
 ```text
-cmd/engram/           main（薄いラッパのみ）
+cmd/engram-opt/           ランタイム本体のmain（薄いラッパのみ・配布対象）
+cmd/engram-setup/         開発者向けセットアップmain（配布物には含めない）
 internal/cli/         cobraコマンド定義
-internal/setup/       依存関係の自動セットアップ
+internal/setup/       依存関係の自動セットアップ（engram-setupから利用）
 internal/domain/      共通型・インターフェース（Scene/Metrics/Config）
 internal/detector/    シーン検出（av-scenechange）
 internal/encoder/     チャンクエンコード＋無劣化結合（ffmpeg）

@@ -2,7 +2,7 @@
 //
 // 実行方法（リポジトリルートから）:
 //
-//	go run ./cmd/engram setup
+//	go run ./cmd/engram-setup
 //
 // やること:
 //   - build/bin/ へ FFmpeg / ffprobe の配置（バージョンpin + SHA256検証付き）

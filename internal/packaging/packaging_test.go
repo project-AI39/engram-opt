@@ -127,7 +127,7 @@ func TestAssembleNoticesEmbedsFullTexts(t *testing.T) {
 func TestParseGoVersionM(t *testing.T) {
 	sample := []byte(strings.Join([]string{
 		"build\\engram-opt.exe: go1.27.0",
-		"\tpath\tengram-opt/cmd/engram",
+		"\tpath\tengram-opt/cmd/engram-opt",
 		"\tmod\tengram-opt\t(devel)\t",
 		"\tdep\tgithub.com/spf13/cobra\tv1.10.2\th1:abc=",
 		"\tdep\tgolang.org/x/sys\tv0.30.0\th1:def=",
@@ -211,7 +211,7 @@ func TestZipDirectoryDeterministic(t *testing.T) {
 	_, out2 := buildZip()
 
 	for name, want := range map[string]string{
-		"engram-opt.exe":    "binary-bytes",
+		"engram-opt.exe":   "binary-bytes",
 		"bin/ffmpeg.exe":   "ffmpeg",
 		"tmp/.placeholder": "placeholder",
 	} {

@@ -48,7 +48,7 @@ func Run(root string, opt Options) (string, error) {
 	for _, tool := range []string{"ffmpeg", "ffprobe", "av-scenechange"} {
 		p := filepath.Join(binDir, toolbin.ToolName(tool))
 		if !toolbin.FileExists(p) {
-			return "", fmt.Errorf("bundled tool missing: %s\nrun 'go run ./cmd/engram setup' first", p)
+			return "", fmt.Errorf("bundled tool missing: %s\nrun 'go run ./cmd/engram-setup' first", p)
 		}
 	}
 	opt.logf("[package] bundled tools OK")
@@ -109,7 +109,7 @@ func Run(root string, opt Options) (string, error) {
 // goBuild はリポジトリルートで本体をビルドし outPath へ出力する。
 // クロスコンパイルは行わない（ホストOS/arch向け。配布は現行pin windows/amd64前提）。
 func goBuild(root, outPath string) error {
-	cmd := exec.Command("go", "build", "-o", outPath, "./cmd/engram")
+	cmd := exec.Command("go", "build", "-o", outPath, "./cmd/engram-opt")
 	cmd.Dir = root
 	if b, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("go build: %w\n%s", err, toolbin.Tail(string(b), 15))

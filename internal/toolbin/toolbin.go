@@ -80,7 +80,7 @@ func detectLayoutFor(exePath string) (Layout, error) {
 	root, rerr := RepoRoot()
 	if rerr != nil {
 		return Layout{}, fmt.Errorf(
-			"no bundled tools next to %s and no repository root detected from the working directory; run 'go run ./cmd/engram setup' first (keep the distributed folder layout intact)",
+			"no bundled tools next to %s and no repository root detected from the working directory; run 'go run ./cmd/engram-setup' first (keep the distributed folder layout intact)",
 			filepath.Base(exePath))
 	}
 	return Layout{Base: filepath.Join(root, "build"), Dev: true}, nil
@@ -103,7 +103,7 @@ func resolveFor(exePath, name string) (string, error) {
 	}
 	p := filepath.Join(lay.Base, "bin", ToolName(name))
 	if !FileExists(p) {
-		return "", fmt.Errorf("binary %q not found in %s; run 'go run ./cmd/engram setup' first",
+		return "", fmt.Errorf("binary %q not found in %s; run 'go run ./cmd/engram-setup' first",
 			name, filepath.Join(lay.Base, "bin"))
 	}
 	return p, nil

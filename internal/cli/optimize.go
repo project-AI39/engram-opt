@@ -22,7 +22,22 @@ import (
 	"engram-opt/internal/ui"
 )
 
-func newOptimizeCmd() *cobra.Command {
+// registerRun はルートコマンドへ実行系（位置引数 input ＋フラグ＋RunE）を組み込む。
+// optimizeサブコマンドは廃止した（単一目的ツールのため、入力はrootの位置引数で直接受ける）。
+//
+// パイプライン:
+//
+//  1. scene detection (av-scenechange via FFmpeg Y4M pipe)
+//  2. per-shot CRF bisection: find the largest CRF whose VMAF
+//     harmonic_mean reaches the target score
+//  3. lossless concatenation of the chosen chunks + audio muxing
+//
+// 起動モード（memo.md「TUIウィザード化」）:
+//   - interactive terminal without <input>: opens the setup wizard
+//   - interactive terminal with <input>: runs immediately (plain logs)
+//   - pipes / CI / redirects: always plain logs (--tui is ignored)
+//   - --headless: never show any interactive UI
+func registerRun(root *cobra.Command) {
 	var (
 		output   string
 		shot     int
@@ -34,129 +49,104 @@ func newOptimizeCmd() *cobra.Command {
 		logFile  string
 	)
 
-	cmd := &cobra.Command{
-		Use:   "optimize [input]",
-		Args:  cobra.MaximumNArgs(1),
-		Short: "Per-shot optimize: detect scenes, bisect CRF per shot, lossless concat",
-		Long: `Per-Shot optimization pipeline:
+	root.Args = cobra.MaximumNArgs(1)
+	root.RunE = func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			// 裸起動: 端末ならウィザード、非端末ならヘルプ
+			return bareRunE(cmd)
+		}
+		ctx := cmd.Context()
+		input := args[0]
 
-  1. scene detection (av-scenechange via FFmpeg Y4M pipe)
-  2. per-shot CRF bisection: find the largest CRF whose VMAF
-     harmonic_mean reaches the target score
-  3. lossless concatenation of the chosen chunks + audio muxing
-
-Launch modes (see memo.md "TUIウィザード化"):
-  - interactive terminal without <input>: opens the setup wizard
-  - interactive terminal with <input>: runs immediately (plain logs)
-  - pipes / CI / redirects: always plain logs (--tui is ignored)
-  - --headless: never show any interactive UI
-
-Temporary trial files live under <tmp-root>/<job-id>/ and are removed on
-success (kept on failure for debugging). Output defaults to <input>.opt.mkv
-next to the source; override with --out.
-
-Use --shot N for a debug run of a single scene's CRF search
-(no concat; the winning trial chunk is kept).`,
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			input := ""
-			if len(args) > 0 {
-				input = args[0]
+		// --log-file: 無人実行向けにログをファイルへも二重化する
+		var logSink io.Writer // --tui 時は ui.Options.LogMirror に渡し、表示中も二重化を維持する
+		if logFile != "" {
+			f, lerr := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+			if lerr != nil {
+				return fmt.Errorf("opening log file: %w", lerr)
 			}
+			defer f.Close()
+			logSink = f
+			prev := log.Writer()
+			log.SetOutput(io.MultiWriter(prev, f))
+			defer log.SetOutput(prev)
+		}
 
-			// --log-file: 無人実行向けにログをファイルへも二重化する
-			var logSink io.Writer // --tui 時は ui.Options.LogMirror に渡し、表示中も二重化を維持する
-			if logFile != "" {
-				f, lerr := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-				if lerr != nil {
-					return fmt.Errorf("opening log file: %w", lerr)
-				}
-				defer f.Close()
-				logSink = f
-				prev := log.Writer()
-				log.SetOutput(io.MultiWriter(prev, f))
-				defer log.SetOutput(prev)
-			}
+		mode, merr := decideLaunch(len(args) > 0, ui.IsTerminal(), tui, headless)
+		if merr != nil {
+			return merr
+		}
 
-			mode, merr := decideLaunch(len(args) > 0, ui.IsTerminal(), tui, headless)
-			if merr != nil {
-				return merr
-			}
+		tmpRoot, terr := toolbin.TempRoot()
+		if terr != nil {
+			return terr
+		}
+		// 同一秒起動の別プロセスとjobDirを共有しないようPID接尾辞を付す
+		jobDir := newJobDir(tmpRoot)
+		sweepStaleJobs(tmpRoot)
 
-			tmpRoot, terr := toolbin.TempRoot()
-			if terr != nil {
-				return terr
-			}
-			// 同一秒起動の別プロセスとjobDirを共有しないようPID接尾辞を付す
-			jobDir := newJobDir(tmpRoot)
-			sweepStaleJobs(tmpRoot)
+		cfg, err := buildSearchConfig(codec, preset)
+		if err != nil {
+			return err
+		}
+		audioMode, aerr := domain.ParseAudioMode(audio)
+		if aerr != nil {
+			return aerr
+		}
+		log.Printf("[optimize] audio mode: %s", audioMode)
 
-			cfg, err := buildSearchConfig(codec, preset)
-			if err != nil {
+		// デバッグモード: 単一シーンの二分探索のみ（結合しない）。フラグ専用でウィザード対象外。
+		if shot >= 0 {
+			return runShotDebug(ctx, input, shot, cfg, jobDir)
+		}
+
+		switch mode {
+		case launchWizard:
+			return launchWizardMode(ctx, input, output, cfg, audioMode, logSink)
+
+		case launchTUI:
+			outPath := defaultOutputPathIfEmpty(output, input)
+			if err := ensureOutside(jobDir, outPath); err != nil {
 				return err
 			}
-			audioMode, aerr := domain.ParseAudioMode(audio)
-			if aerr != nil {
-				return aerr
+			rep, uerr := ui.Run(ctx, newOrchestrator(audioMode), input, outPath, jobDir, cfg, ui.Options{
+				InputPath:  input,
+				OutputPath: outPath,
+				Codec:      cfg.Codec,
+				Preset:     preset,
+				Target:     cfg.TargetScore,
+				Audio:      string(audioMode),
+				LogMirror:  logSink,
+			})
+			if uerr != nil {
+				return uerr
 			}
-			log.Printf("[optimize] audio mode: %s", audioMode)
+			printSummary(input, rep)
+			return nil
 
-			// デバッグモード: 単一シーンの二分探索のみ（結合しない）。フラグ専用でウィザード対象外。
-			if shot >= 0 {
-				if input == "" {
-					return fmt.Errorf("--shot requires an input video path")
-				}
-				return runShotDebug(ctx, input, shot, cfg, jobDir)
+		default: // launchPlain
+			outPath := defaultOutputPathIfEmpty(output, input)
+			if err := ensureOutside(jobDir, outPath); err != nil {
+				return err
 			}
-
-			switch mode {
-			case launchWizard:
-				return launchWizardMode(ctx, input, output, cfg, audioMode, logSink)
-
-			case launchTUI:
-				outPath := defaultOutputPathIfEmpty(output, input)
-				if err := ensureOutside(jobDir, outPath); err != nil {
-					return err
-				}
-				rep, uerr := ui.Run(ctx, newOrchestrator(audioMode), input, outPath, jobDir, cfg, ui.Options{
-					InputPath:  input,
-					OutputPath: outPath,
-					Codec:      cfg.Codec,
-					Preset:     preset,
-					Target:     cfg.TargetScore,
-					Audio:      string(audioMode),
-					LogMirror:  logSink,
-				})
-				if uerr != nil {
-					return uerr
-				}
-				printSummary(input, rep)
-				return nil
-
-			default: // launchPlain
-				outPath := defaultOutputPathIfEmpty(output, input)
-				if err := ensureOutside(jobDir, outPath); err != nil {
-					return err
-				}
-				report, perr := orchRun(ctx, input, outPath, jobDir, cfg, audioMode)
-				if perr != nil {
-					return perr
-				}
-				printSummary(input, report)
-				return nil
+			report, perr := orchRun(ctx, input, outPath, jobDir, cfg, audioMode)
+			if perr != nil {
+				return perr
 			}
-		},
+			printSummary(input, report)
+			return nil
+		}
 	}
-	cmd.Flags().StringVarP(&output, "out", "o", "", "final output path (default: <input>.opt.mkv)")
-	cmd.Flags().IntVar(&shot, "shot", -1, "debug: run CRF search on this scene index only")
-	cmd.Flags().StringVar(&codec, "codec", string(domain.CodecH264), "encode codec: h264 | hevc | av1")
-	cmd.Flags().StringVar(&preset, "preset", "medium", "encoder preset (identical across all trials)")
-	cmd.Flags().StringVar(&audio, "audio", string(domain.DefaultAudioMode), "final audio track: copy | opus | aac | none")
-	cmd.Flags().BoolVar(&headless, "headless", false, "never show any interactive UI (plain logs only)")
-	cmd.Flags().BoolVar(&tui, "tui", false, "show interactive dashboard (falls back to plain logs when stdout is not a terminal)")
-	cmd.Flags().StringVar(&logFile, "log-file", "", "append log output to this file (for unattended runs)")
-	return cmd
+
+	f := root.Flags()
+	f.StringVarP(&output, "out", "o", "", "final output path (default: <input>.opt.mkv)")
+	f.IntVar(&shot, "shot", -1, "debug: run CRF search on this scene index only")
+	f.StringVar(&codec, "codec", string(domain.CodecH264), "encode codec: h264 | hevc | av1")
+	f.StringVar(&preset, "preset", "medium", "encoder preset (identical across all trials)")
+	f.StringVar(&audio, "audio", string(domain.DefaultAudioMode), "final audio track: copy | opus | aac | none")
+	f.BoolVar(&headless, "headless", false, "never show any interactive UI (plain logs only)")
+	f.BoolVar(&tui, "tui", false, "show interactive dashboard (falls back to plain logs when stdout is not a terminal)")
+	f.StringVar(&logFile, "log-file", "", "append log output to this file (for unattended runs)")
 }
 
 // ===== 起動モード判定（memo.md「TUIウィザード化」） =====

@@ -18,7 +18,7 @@
 ## アーキテクチャの固定方針（memo.md 由来）
 
 - **完全ポータブル配布**: Zip解凍だけで動作。ユーザーへのランタイム導入・PATH設定要求は禁止。
-- **環境構築はGoスクリプト一発**: `go run ./cmd/engram setup`（OS/arch自動判別、FFmpeg静的ビルドのDL、Rust製 `av-scenechange` を `cargo build --release` でローカルビルド）。ローカル開発とCIで同一コマンドを使う（Dev-CI Parity）。**開発者環境にはRustツールチェーン（cargo）が必須**。
+- **環境構築はGoスクリプト一発**: `go run ./cmd/engram-setup`（OS/arch自動判別、FFmpeg静的ビルドのDL、Rust製 `av-scenechange` を `cargo build --release` でローカルビルド）。ローカル開発とCIで同一コマンドを使う（Dev-CI Parity）。**開発者環境にはRustツールチェーン（cargo）が必須**。
 - **依存バイナリのpin**: FFmpeg 8.1.2 full build（GyanD/codexffmpeg GitHubリリースzip・公式SHA256照合。essentialsにはlibsvtav1が無いためfullを採用）と av-scenechange v0.24.1 をバージョンpinしSHA256検証する。セットアップは冪等（導入済みなら検証のみ）で、検証にはlibvmafフィルタ＋必須エンコーダ（h264/hevc/av1-svt）の存在確認を含む。
 - **VMAF実装時の注意**（実測済み）: フィルタ名は8系で `vmaf` → `libvmaf` に改名。`vmaf_v1.0.16_3d0h` はCAMBI特徴量の関係で低解像度入力だと失敗するため、libvmaf投入前に1920x1080へのリサイズが必要（詳細はmemo.md）。
 - **外部バイナリの呼び出し**: 必ず `os.Executable()` 基準で同梱 `bin/{tool}` を解決する（`toolbin.DetectLayout`: 本体隣のbin/存在を自己検証し、無ければリポジトリ `build/` へフォールバック）。PATH参照やシステムのffmpeg呼び出しは書かない。tmpも同一base直下（配布: `<本体>/tmp`、開発: `<repo>/build/tmp`）。
