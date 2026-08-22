@@ -17,8 +17,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
+
+	"engram-opt/internal/toolbin"
 )
 
 // Options はパッケージング実行時の設定。
@@ -45,15 +46,15 @@ func Run(root string, opt Options) (string, error) {
 
 	// 1) 同梱バイナリの事前確認（setup未実行ならここで明確に失敗させる）
 	for _, tool := range []string{"ffmpeg", "ffprobe", "av-scenechange"} {
-		p := filepath.Join(binDir, toolName(tool))
-		if !fileExists(p) {
+		p := filepath.Join(binDir, toolbin.ToolName(tool))
+		if !toolbin.FileExists(p) {
 			return "", fmt.Errorf("bundled tool missing: %s\nrun 'go run ./cmd/engram setup' first", p)
 		}
 	}
 	opt.logf("[package] bundled tools OK")
 
 	// 2) 本体ビルド → build/<optimizer>.exe
-	exe := filepath.Join(buildDir, toolName("optimizer"))
+	exe := filepath.Join(buildDir, toolbin.ToolName("optimizer"))
 	if err := goBuild(root, exe); err != nil {
 		return "", fmt.Errorf("building optimizer: %w", err)
 	}
@@ -70,7 +71,7 @@ func Run(root string, opt Options) (string, error) {
 	opt.logf("[package] wrote THIRD-PARTY-NOTICES.txt (full license texts embedded)")
 
 	// 4) LICENSE 同梱 + 5) tmp プレースホルダ
-	if err := copyFile(filepath.Join(root, "LICENSE"), filepath.Join(buildDir, "LICENSE")); err != nil {
+	if err := toolbin.CopyFile(filepath.Join(root, "LICENSE"), filepath.Join(buildDir, "LICENSE")); err != nil {
 		return "", fmt.Errorf("copying LICENSE: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Join(buildDir, "tmp"), 0o755); err != nil {
@@ -81,7 +82,7 @@ func Run(root string, opt Options) (string, error) {
 		return "", err
 	}
 	// README も配布物に同梱する（memo.md 配置図どおり README.txt として）
-	if err := copyFile(filepath.Join(root, "README.md"), filepath.Join(buildDir, "README.txt")); err != nil {
+	if err := toolbin.CopyFile(filepath.Join(root, "README.md"), filepath.Join(buildDir, "README.txt")); err != nil {
 		return "", fmt.Errorf("copying README: %w", err)
 	}
 	opt.logf("[package] staged LICENSE / README.txt / tmp/")
@@ -105,53 +106,15 @@ func Run(root string, opt Options) (string, error) {
 
 // ===== 内部ヘルパ =====
 
-func toolName(base string) string {
-	if runtime.GOOS == "windows" {
-		return base + ".exe"
-	}
-	return base
-}
-
-func fileExists(path string) bool {
-	fi, err := os.Stat(path)
-	return err == nil && fi.Mode().IsRegular()
-}
-
 // goBuild はリポジトリルートで本体をビルドし outPath へ出力する。
 // クロスコンパイルは行わない（ホストOS/arch向け。配布は現行pin windows/amd64前提）。
 func goBuild(root, outPath string) error {
 	cmd := exec.Command("go", "build", "-o", outPath, "./cmd/engram")
 	cmd.Dir = root
 	if b, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("go build: %w\n%s", err, tailLines(string(b), 15))
+		return fmt.Errorf("go build: %w\n%s", err, toolbin.Tail(string(b), 15))
 	}
 	return nil
-}
-
-func tailLines(s string, n int) string {
-	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
-	}
-	return strings.Join(lines, "\n")
-}
-
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, in)
-	return err
 }
 
 // zipDirectory は srcDir の中身（再帰）を dstZip のルート直下へ格納する。

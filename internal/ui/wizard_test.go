@@ -218,6 +218,16 @@ func TestWizardConfirmValidationBlocksStart(t *testing.T) {
 		t.Fatalf("missing file: cmd=%v formErr=%q", cmd, m.wiz.formErr)
 	}
 
+	// 引用符付きパス（D&D等で貼付される形）は剥いてから存在判定されること。
+	// 実在ファイル＋意図的な数値不正で、存在チェックを通過した（=引用符が剥れた）ことだけを見る
+	m.wiz.input.SetValue(`"` + createTempFileForTest(t, dir) + `"`)
+	m.wiz.minCRF.SetValue("abc")
+	next, cmd = m.Update(keyEnter())
+	m = next.(Model)
+	if cmd != nil || !strings.Contains(m.wiz.formErr, "Min CRF") {
+		t.Fatalf("quoted path must be stripped: cmd=%v formErr=%q", cmd, m.wiz.formErr)
+	}
+
 	// 数値パース失敗
 	m.wiz.input.SetValue(createTempFileForTest(t, dir))
 	m.wiz.minCRF.SetValue("abc")

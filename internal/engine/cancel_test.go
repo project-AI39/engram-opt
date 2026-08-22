@@ -41,12 +41,12 @@ type countingCancelEvaluator struct {
 	calls  int
 }
 
-func (f *countingCancelEvaluator) Evaluate(_ context.Context, orig string, sc domain.Scene, chunk string) (domain.QualityMetrics, error) {
+func (f *countingCancelEvaluator) Evaluate(_ context.Context, orig string, sc domain.Scene, chunk string, _ string) (domain.QualityMetrics, error) {
 	f.calls++
 	if f.calls == 2 {
 		f.cancel()
 	}
-	return f.fakeEvaluator.Evaluate(context.Background(), orig, sc, chunk)
+	return f.fakeEvaluator.Evaluate(context.Background(), orig, sc, chunk, "")
 }
 
 // 試行と試行の間でキャンセルされた場合、次の試行に入らずに中断する。

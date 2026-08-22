@@ -16,12 +16,16 @@ import (
 	"time"
 
 	"github.com/mholt/archives"
+
+	"engram-opt/internal/toolbin"
 )
 
 // ===== 共通ユーティリティ =====
 
 // downloadFile は url を dest へ保存する。curl/wget等を使わず net/http で直接取得し、
 // シェル差異を排除する。進捗は20MBごとにログ出力する。
+// 途中失敗時に部分ファイルを dest へ残留させないよう、一旦 <dest>.part へ書き出し、
+// 完了後に置換する。
 func downloadFile(ctx context.Context, url, dest string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -39,11 +43,18 @@ func downloadFile(ctx context.Context, url, dest string) error {
 		return fmt.Errorf("download failed: %s (%s)", resp.Status, url)
 	}
 
-	f, err := os.Create(dest)
+	part := dest + ".part"
+	f, err := os.Create(part)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	complete := false
+	defer func() {
+		if !complete {
+			f.Close()
+			os.Remove(part) // 失敗時の断片を掃除
+		}
+	}()
 
 	const chunk = 1 << 20         // 1 MiB
 	const progressUnit = 20 << 20 // 20 MiB ごとに進捗表示
@@ -69,7 +80,18 @@ func downloadFile(ctx context.Context, url, dest string) error {
 		}
 	}
 	log.Printf("[setup]   %.1f MB downloaded", float64(total)/(1<<20))
-	return f.Sync()
+	if err := f.Sync(); err != nil {
+		return err
+	}
+	// Windowsでも置換できるよう、Close済みの状態でrenameする
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(part, dest); err != nil {
+		return err
+	}
+	complete = true
+	return nil
 }
 
 // verifySHA256 はファイルのSHA256が期待値と一致することを確認する。
@@ -165,34 +187,14 @@ func copyArchiveEntry(info archives.FileInfo, destPath string) error {
 
 // copyFile はファイルをコピーする（Unix系では実行権限を付与）。
 func copyFile(srcPath, destPath string) error {
-	src, err := os.Open(srcPath)
-	if err != nil {
+	if err := toolbin.CopyFile(srcPath, destPath); err != nil {
 		return err
 	}
-	defer src.Close()
-	dst, err := os.Create(destPath)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(dst, src); err != nil {
-		dst.Close()
-		return err
-	}
-	if err := dst.Close(); err != nil {
-		return err
-	}
+	// Unix系では実行権限を付与（Windowsでは不要）
 	if runtime.GOOS != "windows" {
 		return os.Chmod(destPath, 0o755)
 	}
 	return nil
-}
-
-// toolName はホストOSに応じた実行バイナリ名を返す（Windowsは .exe 付き）。
-func toolName(base string) string {
-	if runtime.GOOS == "windows" {
-		return base + ".exe"
-	}
-	return base
 }
 
 func firstLine(s string) string {
@@ -202,18 +204,13 @@ func firstLine(s string) string {
 	return s
 }
 
-func tail(s string, maxLines int) string {
-	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
-	if len(lines) > maxLines {
-		lines = lines[len(lines)-maxLines:]
-	}
-	return strings.Join(lines, "\n")
-}
+// 以下の薄いラッパは setup パッケージ内の既存呼び出し箇所を保ちつつ、
+// 実装を toolbin の共通関数へ集約するためのもの。
+func tail(s string, maxLines int) string { return toolbin.Tail(s, maxLines) }
 
-func fileExists(path string) bool {
-	fi, err := os.Stat(path)
-	return err == nil && fi.Mode().IsRegular()
-}
+func fileExists(path string) bool { return toolbin.FileExists(path) }
+
+func toolName(base string) string { return toolbin.ToolName(base) }
 
 func dirExists(path string) bool {
 	fi, err := os.Stat(path)

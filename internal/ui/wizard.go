@@ -383,7 +383,8 @@ func (m Model) confirmWizard() (Model, tea.Cmd) {
 	if m.wiz.starting {
 		return m, nil
 	}
-	in := strings.TrimSpace(m.wiz.input.Value())
+	// D&Dや「パスのコピー」では空白入りパスが二重引用符付きで張り付くため剥いてから扱う
+	in := strings.Trim(strings.TrimSpace(m.wiz.input.Value()), `"`)
 	switch {
 	case in == "":
 		m.wiz.formErr = "入力ファイルを指定してください"

@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -44,11 +45,16 @@ func New() *Evaluator { return &Evaluator{} }
 func (e *Evaluator) Name() string { return "libvmaf" }
 
 // Evaluate 元動画の該当シーン区間とエンコード済みチャンクを比較評価する。
-func (e *Evaluator) Evaluate(ctx context.Context, originalPath string, scene domain.Scene, encodedChunkPath string) (domain.QualityMetrics, error) {
+// workDir には評価ログ（vmaf_report.json）の書き出し先ディレクトリを受け取る
+// （ジョブ一時領域配下。AGENTS.md「tmpも同一base直下」規約）。
+func (e *Evaluator) Evaluate(ctx context.Context, originalPath string, scene domain.Scene, encodedChunkPath string, workDir string) (metrics domain.QualityMetrics, retErr error) {
 	// 他モジュール（engine/encoder）と同様、フレームSSOT不変条件を入口で検証する。
 	// 不正区間のまま filter_complex を組むと select が空になり評価が無意味になるため。
 	if err := scene.Validate(); err != nil {
 		return domain.QualityMetrics{}, fmt.Errorf("invalid scene: %w", err)
+	}
+	if workDir == "" {
+		return domain.QualityMetrics{}, fmt.Errorf("evaluation requires a work directory")
 	}
 	ffmpegPath, err := toolbin.Resolve("ffmpeg")
 	if err != nil {
@@ -66,20 +72,31 @@ func (e *Evaluator) Evaluate(ctx context.Context, originalPath string, scene dom
 		return domain.QualityMetrics{}, fmt.Errorf("probing frame rate: %w", err)
 	}
 
-	// ログ出力先は作業ディレクトリ内の相対パス（Windows絶対パスのコロン問題回避）
-	workDir, err := os.MkdirTemp("", "engram-vmaf-")
+	// ログ出力先は作業ディレクトリ配下の専用サブディレクトリ内の相対パス
+	// （Windows絶対パスのコロン問題回避）。
+	// 呼び出し側所有の workDir は決して削除せず、自分が作った一時サブディレクトリだけを掃除する。
+	// 成功時のみ削除し、失敗時は vmaf_report.json を調査証拠として残す。
+	evalDir, err := os.MkdirTemp(workDir, "vmaf-")
 	if err != nil {
-		return domain.QualityMetrics{}, fmt.Errorf("creating temp dir: %w", err)
+		return domain.QualityMetrics{}, fmt.Errorf("creating evaluation dir: %w", err)
 	}
-	defer os.RemoveAll(workDir)
+	defer func() {
+		if retErr == nil {
+			os.Remove(evalDir)
+		} else {
+			log.Printf("[vmaf] kept report for inspection: %s", filepath.Join(evalDir, logFileName))
+		}
+	}()
 
-	metrics, primaryErr := e.evaluateWithModel(ctx, ffmpegPath, workDir, originalPath, scene, encodedChunkPath, primaryModel, fpsNum, fpsDen)
+	metrics, primaryErr := e.evaluateWithModel(ctx, ffmpegPath, evalDir, originalPath, scene, encodedChunkPath, primaryModel, fpsNum, fpsDen)
 	if primaryErr != nil {
-		// フォールバックモデルで再試行（固定仕様）
-		m2, fbErr := e.evaluateWithModel(ctx, ffmpegPath, workDir, originalPath, scene, encodedChunkPath, fallbackModel, fpsNum, fpsDen)
+		// フォールバックモデルで再試行（固定仕様）。両方の原因をerrors.Is可能な形で保持する
+		log.Printf("[vmaf] WARNING: primary model failed (%v); falling back to %s. "+
+			"Scores are model-specific and may not be comparable with other shots.",
+			primaryErr, fallbackModel)
+		m2, fbErr := e.evaluateWithModel(ctx, ffmpegPath, evalDir, originalPath, scene, encodedChunkPath, fallbackModel, fpsNum, fpsDen)
 		if fbErr != nil {
-			return domain.QualityMetrics{}, fmt.Errorf(
-				"vmaf evaluation failed (primary %s: %v / fallback %s: %w)",
+			return domain.QualityMetrics{}, fmt.Errorf("vmaf evaluation failed (primary %s: %w / fallback %s: %w)",
 				primaryModel, primaryErr, fallbackModel, fbErr)
 		}
 		metrics = m2
@@ -116,7 +133,7 @@ func (e *Evaluator) evaluateWithModel(ctx context.Context, ffmpegPath, workDir, 
 	cmd.Dir = workDir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return domain.QualityMetrics{}, fmt.Errorf("libvmaf run failed (%s): %w\n%s",
-			model, err, tail(string(out), 20))
+			model, err, toolbin.Tail(string(out), 20))
 	}
 
 	raw, err := os.ReadFile(filepath.Join(workDir, logFileName))
@@ -192,10 +209,3 @@ func parseReport(raw []byte, scene domain.Scene) (domain.QualityMetrics, error) 
 }
 
 // tail は文字列の末尾 maxLines 行のみを返す（エラーメッセージ用の切り詰め）。
-func tail(s string, maxLines int) string {
-	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
-	if len(lines) > maxLines {
-		lines = lines[len(lines)-maxLines:]
-	}
-	return strings.Join(lines, "\n")
-}

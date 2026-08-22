@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -137,5 +138,75 @@ func assertDirExists(t *testing.T, path string) {
 	fi, err := os.Stat(path)
 	if err != nil || !fi.IsDir() {
 		t.Fatalf("dir %s should exist during processing (err=%v)", path, err)
+	}
+}
+
+// concatFailEncoder は結合時に部分ファイルを書き残してから失敗する。
+type concatFailEncoder struct {
+	fakeEncoder
+}
+
+func (f *concatFailEncoder) ConcatChunks(_ context.Context, _ []string, finalOutputPath string) error {
+	_ = os.WriteFile(finalOutputPath, []byte("partial"), 0o644)
+	return fmt.Errorf("synthetic concat failure")
+}
+
+func TestRequireDistinctPaths(t *testing.T) {
+	dir := t.TempDir()
+	in := filepath.Join(dir, "video.mp4")
+	if err := RequireDistinctPaths(in, filepath.Join(dir, "out.mkv")); err != nil {
+		t.Fatalf("distinct paths must pass: %v", err)
+	}
+	if err := RequireDistinctPaths(in, in); err == nil {
+		t.Fatal("identical paths must fail")
+	}
+	// Windowsでは大小文字違いも同一パス扱い（実ファイルの有無は問わない純粋比較）
+	if runtime.GOOS == "windows" {
+		if err := RequireDistinctPaths(in, filepath.Join(dir, "VIDEO.MP4")); err == nil {
+			t.Fatal("case variant of input must fail on windows")
+		}
+	}
+}
+
+func TestOrchestratorRejectsOutputEqualToInput(t *testing.T) {
+	orch := &Orchestrator{
+		Detector:  &fakeDetector{scenes: twoScenes()},
+		Encoder:   &fakeEncoder{},
+		Evaluator: &fakeEvaluator{scoreAt: func(int) float64 { return 100 }},
+	}
+	_, err := orch.Run(context.Background(), "in.mp4", "in.mp4", t.TempDir(),
+		domain.SearchConfig{Codec: domain.CodecH264, MinCRF: 15, MaxCRF: 36, TargetScore: 90},
+		ProgressCallbacks{})
+	if err == nil || !strings.Contains(err.Error(), "must differ") {
+		t.Fatalf("expected distinct-path rejection, got %v", err)
+	}
+}
+
+func TestOrchestratorFailedConcatLeavesNoPartialOutput(t *testing.T) {
+	outDir := t.TempDir()
+	output := filepath.Join(outDir, "final.mkv")
+	workDir := filepath.Join(t.TempDir(), "job")
+
+	orch := &Orchestrator{
+		Detector:  &fakeDetector{scenes: twoScenes()},
+		Encoder:   &concatFailEncoder{},
+		Evaluator: &fakeEvaluator{scoreAt: func(int) float64 { return 100 }},
+	}
+	cfg := domain.SearchConfig{Codec: domain.CodecH264, MinCRF: 15, MaxCRF: 36, TargetScore: 90}
+	if _, err := orch.Run(context.Background(), "in.mp4", output, workDir, cfg, ProgressCallbacks{}); err == nil {
+		t.Fatal("expected concat failure")
+	}
+	// 完成パスには何も静置されず、ステージング断片も掃除済みであること
+	if _, err := os.Stat(output); !os.IsNotExist(err) {
+		t.Fatalf("output must not exist after failed concat: %v", err)
+	}
+	entries, rerr := os.ReadDir(outDir)
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	for _, e := range entries {
+		if strings.Contains(e.Name(), ".part-") {
+			t.Fatalf("staged partial must be cleaned: %s", e.Name())
+		}
 	}
 }

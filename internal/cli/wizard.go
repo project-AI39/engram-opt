@@ -11,8 +11,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"path/filepath"
-	"time"
 
 	"engram-opt/internal/domain"
 	"engram-opt/internal/engine"
@@ -27,7 +25,7 @@ func launchWizardMode(ctx context.Context, input, output string, cfg domain.Sear
 	if err != nil {
 		return err
 	}
-	jobDir := filepath.Join(tmpRoot, time.Now().Format("20060102-150405"))
+	jobDir := newJobDir(tmpRoot)
 
 	opts := ui.Options{
 		InputPath:  input,
@@ -51,6 +49,10 @@ func launchWizardMode(ctx context.Context, input, output string, cfg domain.Sear
 		}
 		if out == "" {
 			out = defaultOutputPathIfEmpty(out, in)
+		}
+		// 元動画保護（出力=入力上書き防止）をパイプライン起動前に早期検証
+		if derr := engine.RequireDistinctPaths(in, out); derr != nil {
+			return ui.PreparedPipeline{}, derr
 		}
 		if aerr := ensureOutside(jobDir, out); aerr != nil {
 			return ui.PreparedPipeline{}, aerr
@@ -95,9 +97,15 @@ func printSummary(input string, r *engine.PipelineReport) {
 		outSize = st.Size()
 	}
 	if inSize > 0 && outSize > 0 {
-		log.Printf("[optimize] size: %.2f MB -> %.2f MB (-%.1f%%)",
-			float64(inSize)/(1<<20), float64(outSize)/(1<<20),
-			100*(1-float64(outSize)/float64(inSize)))
+		delta := 100 * (1 - float64(outSize)/float64(inSize))
+		sign := "-"
+		if delta < 0 {
+			// 再エンコードで大きくなった場合は増加として正直に表示する
+			sign = "+"
+			delta = -delta
+		}
+		log.Printf("[optimize] size: %.2f MB -> %.2f MB (%s%.1f%%)",
+			float64(inSize)/(1<<20), float64(outSize)/(1<<20), sign, delta)
 	}
 	log.Printf("[optimize] output: %s (total trials=%d)", r.OutputPath, r.TotalTrials)
 }

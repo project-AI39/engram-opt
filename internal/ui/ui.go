@@ -24,6 +24,10 @@ var ErrNoTTY = errors.New("stdout is not a terminal; TUI unavailable")
 // IsTerminal はstdoutが端末に接続されているかどうかを返す。
 // stdlibのみで判定する（mattn/go-isatty 等の依存は導入しない方針）。
 // CLIの起動モード判定（memo.md「TUIウィザード化」）と、TUI起動前のガードの双方で使う。
+//
+// 注意: ModeCharDevice はNULデバイス等のキャラクタデバイスも端末扱いする近似判定。
+// リダイレクト（ファイル/パイプ）は確実に false になるため実用上は十分だが、
+// 厳密なTTY同定が必要になった場合はOS固有APIの導入を検討する。
 func IsTerminal() bool {
 	fi, err := os.Stdout.Stat()
 	return err == nil && fi.Mode()&os.ModeCharDevice != 0

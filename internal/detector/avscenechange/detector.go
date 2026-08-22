@@ -24,6 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os/exec"
 	"strconv"
@@ -100,18 +101,40 @@ func detectCuts(ctx context.Context, ffmpegPath, ascPath, inputPath string) ([]i
 
 	ascCmd := exec.CommandContext(ctx, ascPath, "-") // "-" はstdin入力の意味
 	ascCmd.Stdin = y4mPipe
-	var jsonOut, ascErr bytes.Buffer
-	ascCmd.Stdout = &jsonOut
+	var ascErr bytes.Buffer
 	ascCmd.Stderr = &ascErr
+	// stdout は全JSONをRAMへ貯めずストリーミング解析する（scoresは長時間動画で巨大になる）
+	ascStdout, err := ascCmd.StdoutPipe()
+	if err != nil {
+		return nil, 0, fmt.Errorf("creating av-scenechange stdout pipe: %w", err)
+	}
 
 	if err := ffCmd.Start(); err != nil {
-		return nil, 0, fmt.Errorf("starting ffmpeg: %w\n%s", err, tail(ffErr.String(), 10))
+		return nil, 0, fmt.Errorf("starting ffmpeg: %w\n%s", err, toolbin.Tail(ffErr.String(), 10))
 	}
 	if err := ascCmd.Start(); err != nil {
 		_ = ffCmd.Process.Kill()
 		_ = ffCmd.Wait()
 		return nil, 0, fmt.Errorf("starting av-scenechange: %w", err)
 	}
+
+	// ascのstdoutを実行中に並行して読み切る。
+	// 読み手が無いとパイプバッファ満杯時にascが書き込みブロックしデッドロックするため、
+	// EOFまで消費してからWaitする順序を厳守する（StdoutPipeの契約上も正しい）。
+	type parsed struct {
+		res detectionResult
+		err error
+	}
+	done := make(chan parsed, 1)
+	go func() {
+		res, perr := parseResult(ascStdout)
+		if perr != nil {
+			// 解析中断でもascがパイプ詰まりで固まらないよう、残り出力を破棄してEOFまで流す
+			_, _ = io.Copy(io.Discard, ascStdout)
+		}
+		done <- parsed{res: res, err: perr}
+	}()
+	p := <-done
 
 	// 待機順序が重要: 先に asc を待つ。
 	// ffmpeg は終了時にstdoutの書き込み側を閉じる → asc がEOFまで読み切って終了する。
@@ -121,18 +144,17 @@ func detectCuts(ctx context.Context, ffmpegPath, ascPath, inputPath string) ([]i
 	ffWaitErr := ffCmd.Wait()
 
 	if ffWaitErr != nil {
-		return nil, 0, fmt.Errorf("ffmpeg failed while piping y4m: %w\n%s", ffWaitErr, tail(ffErr.String(), 20))
+		return nil, 0, fmt.Errorf("ffmpeg failed while piping y4m: %w\n%s", ffWaitErr, toolbin.Tail(ffErr.String(), 20))
 	}
 	if ascWaitErr != nil {
-		return nil, 0, fmt.Errorf("av-scenechange failed: %w\n%s", ascWaitErr, tail(ascErr.String(), 20))
+		return nil, 0, fmt.Errorf("av-scenechange failed: %w\n%s", ascWaitErr, toolbin.Tail(ascErr.String(), 20))
+	}
+	if p.err != nil {
+		return nil, 0, p.err
 	}
 
-	res, err := parseResult(jsonOut.Bytes())
-	if err != nil {
-		return nil, 0, err
-	}
-	log.Printf("[detector] av-scenechange finished: %d cut point(s), %d frame(s)", len(res.sceneChanges), res.frameCount)
-	return res.sceneChanges, res.frameCount, nil
+	log.Printf("[detector] av-scenechange finished: %d cut point(s), %d frame(s)", len(p.res.sceneChanges), p.res.frameCount)
+	return p.res.sceneChanges, p.res.frameCount, nil
 }
 
 // detectionResult は av-scenechange 出力から必要な字段のみを取り出したもの。
@@ -142,11 +164,12 @@ type detectionResult struct {
 }
 
 // parseResult は av-scenechange のJSON出力をストリーミング解析する。
-// scores（全フレーム分の内訳）は巨大なため値ごと読み飛ばしてメモリ使用量を抑える。
-func parseResult(data []byte) (detectionResult, error) {
+// scores（全フレーム分の内訳）は巨大なため値ごと読み飛ばしてメモリ使用量を抑える
+// （実行中のパイプから直接読むため、出力全体をRAMへ展開しない）。
+func parseResult(r io.Reader) (detectionResult, error) {
 	var res detectionResult
 
-	dec := json.NewDecoder(bytes.NewReader(data))
+	dec := json.NewDecoder(r)
 	tok, err := dec.Token()
 	if err != nil {
 		return res, fmt.Errorf("parsing av-scenechange output: %w", err)
@@ -287,10 +310,3 @@ func probeTotalFrames(ctx context.Context, ffprobePath, inputPath string) (int64
 }
 
 // tail は文字列の末尾 maxLines 行のみを返す（エラーメッセージ用の切り詰め）。
-func tail(s string, maxLines int) string {
-	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
-	if len(lines) > maxLines {
-		lines = lines[len(lines)-maxLines:]
-	}
-	return strings.Join(lines, "\n")
-}

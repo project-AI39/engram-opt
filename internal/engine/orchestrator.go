@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"engram-opt/internal/domain"
 )
@@ -68,6 +70,12 @@ func (o *Orchestrator) run(ctx context.Context, inputPath, outputPath, workDir s
 	if o.Detector == nil || o.Encoder == nil || o.Evaluator == nil {
 		return nil, fmt.Errorf("orchestrator requires detector, encoder and evaluator")
 	}
+	// 元動画保護の唯一の防壁: 出力が入力と同一パスなら fail-fast する。
+	// 結合は concat demuxer（list.txt）経由のため ffmpeg 自己保護が発火せず、
+	// 検証なしでは -c copy が元動画を exit 0 で上書きする。
+	if err := RequireDistinctPaths(inputPath, outputPath); err != nil {
+		return nil, err
+	}
 	// 音声設定の早期検証（fail-fast）。実行終盤のmuxで初めて気づくのを防ぐ。
 	switch o.Audio {
 	case "", domain.AudioNone:
@@ -126,11 +134,20 @@ func (o *Orchestrator) run(ctx context.Context, inputPath, outputPath, workDir s
 		chunks = append(chunks, r.BestChunkPath)
 	}
 
+	// 最終出力はユーザーパスへの直書きではなく、同一ディレクトリ内のステージングへ
+	// 書き出してから確定する。mux/concat の途中死で部分破損ファイルが完成パスに
+	// 静置されるのを防ぐ（無人運用での「壊れた完成品」混入防止）。
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		return nil, fmt.Errorf("creating output dir: %w", err)
+	}
+	stagedPath := stagingPathFor(outputPath)
+	defer func() { _ = os.Remove(stagedPath) }() // 失敗時・中断時の掃除（成功後は存在しない）
+
 	// 音声付与の要否。必要な場合は結合結果をjobDir内の中間ファイルへ出し、
-	// 最終ミックス（MuxAudio）で outputPath へ書き出す。音声が不要なら
-	// 従来どおり結合が直接 outputPath を生成する。
+	// 最終ミックス（MuxAudio）でステージングへ書き出す。音声が不要なら
+	// 結合が直接ステージングを生成する。
 	useAudio := o.Audio != "" && o.Audio != domain.AudioNone
-	concatTarget := outputPath
+	concatTarget := stagedPath
 	if useAudio {
 		concatTarget = filepath.Join(workDir, "concat_video.mkv")
 	}
@@ -139,9 +156,16 @@ func (o *Orchestrator) run(ctx context.Context, inputPath, outputPath, workDir s
 	}
 	if useAudio {
 		log.Printf("[pipeline] muxing audio (mode=%s)", o.Audio)
-		if err := o.Muxer.MuxAudio(ctx, concatTarget, inputPath, o.Audio, outputPath); err != nil {
+		if err := o.Muxer.MuxAudio(ctx, concatTarget, inputPath, o.Audio, stagedPath); err != nil {
 			return nil, fmt.Errorf("audio mux (%s): %w", o.Audio, err)
 		}
+	}
+
+	// 原子的確定: ステージング完成後にユーザー指定パスへ置換する。
+	// 同一ディレクトリ内renameのためボリューム跨ぎは発生せず、Windowsでも
+	// 既存ファイルへの上書きが可能（os.Rename は MoveFileEx(REPLACE_EXISTING)）。
+	if err := os.Rename(stagedPath, outputPath); err != nil {
+		return nil, fmt.Errorf("finalizing output: %w", err)
 	}
 
 	sumTrials := 0
@@ -154,4 +178,38 @@ func (o *Orchestrator) run(ctx context.Context, inputPath, outputPath, workDir s
 		OutputPath:  outputPath,
 		TotalTrials: sumTrials,
 	}, nil
+}
+
+// stagingPathFor は出力と同ディレクトリに作るステージング用パスを返す。
+// 先頭ドットで隠しファイル扱いとし、PID接尾辞で衝突を避ける。
+// 末尾は必ず元と同じ拡張子にする——ffmpegは出力フォーマットを拡張子から
+// 推定するため、拡張子を持たない名前（.final.mkv.part-N 等）では
+// 「Invalid argument」(-22) で起動に失敗する（実測）。
+func stagingPathFor(output string) string {
+	dir := filepath.Dir(output)
+	ext := filepath.Ext(output)
+	base := strings.TrimSuffix(filepath.Base(output), ext)
+	return filepath.Join(dir, fmt.Sprintf(".%s.part-%d%s", base, os.Getpid(), ext))
+}
+
+// RequireDistinctPaths は入力と出力が同一パスでないことを検証する。
+// Windowsではパス大小文字を同一視する。エクスポートは呼び出し側（CLIウィザード等）
+// がパイプライン起動前に早期検証できるようにするため。
+func RequireDistinctPaths(input, output string) error {
+	absIn, err := filepath.Abs(input)
+	if err != nil {
+		return fmt.Errorf("resolving input path: %w", err)
+	}
+	absOut, err := filepath.Abs(output)
+	if err != nil {
+		return fmt.Errorf("resolving output path: %w", err)
+	}
+	same := absIn == absOut
+	if runtime.GOOS == "windows" {
+		same = strings.EqualFold(absIn, absOut)
+	}
+	if same {
+		return fmt.Errorf("output path must differ from input path: %s", output)
+	}
+	return nil
 }

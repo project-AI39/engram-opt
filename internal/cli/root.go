@@ -3,6 +3,11 @@
 package cli
 
 import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/spf13/cobra"
 
 	"engram-opt/internal/domain"
@@ -40,6 +45,11 @@ Run without arguments from a terminal to open the interactive setup wizard
 
 // Execute はCLI全体を実行し、エラーを呼び出し側（main）へ返す。
 // 終了コードの制御とエラー表示は main 側が行う。
+// Execute はシグナル対応コンテキスト付きでCLIを実行する。
+// Ctrl+C / SIGTERM で ctx がキャンセルされ、実行中の ffmpeg 等の子プロセスは
+// exec.CommandContext 経由で停止される（孤児プロセス化の防止）。
 func Execute() error {
-	return NewRootCmd().Execute()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return NewRootCmd().ExecuteContext(ctx)
 }

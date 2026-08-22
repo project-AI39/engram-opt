@@ -208,7 +208,7 @@ func TestZipDirectoryDeterministic(t *testing.T) {
 	}
 
 	files1, out1 := buildZip()
-	files2, _ := buildZip()
+	_, out2 := buildZip()
 
 	for name, want := range map[string]string{
 		"optimizer.exe":    "binary-bytes",
@@ -224,8 +224,8 @@ func TestZipDirectoryDeterministic(t *testing.T) {
 		t.Fatalf("unexpected extra entries: %v", files1)
 	}
 
-	h1, h2 := sha256.Sum256(readAll(t, out1)), sha256.Sum256(readAll(t, out1))
-	_ = files2 // 同一構築なので内容一致は上で担保済み
+	// 2回の構築（別ディレクトリ・別出力パス）がバイト等価であること
+	h1, h2 := sha256.Sum256(readAll(t, out1)), sha256.Sum256(readAll(t, out2))
 	if hex.EncodeToString(h1[:]) != hex.EncodeToString(h2[:]) {
 		t.Fatal("same input must yield byte-identical zip")
 	}

@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"engram-opt/internal/toolbin"
 )
 
 // 固定ライセンス原文（リポジトリへベンダリング済み。更新時は一次元から再取得して差し替え）。
@@ -35,15 +37,10 @@ const (
 func overrideLicensePath(root, path, version string) string {
 	key := strings.ReplaceAll(path, "/", "_") + "_at_" + version + "_LICENSE.txt"
 	p := filepath.Join(root, overridesDir, key)
-	if fileExistsAt(p) {
+	if toolbin.FileExists(p) {
 		return p
 	}
 	return ""
-}
-
-func fileExistsAt(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && fi.Mode().IsRegular()
 }
 
 // moduleInfo はGo依存モジュール1件分の情報。

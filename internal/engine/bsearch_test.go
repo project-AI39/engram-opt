@@ -41,7 +41,7 @@ type fakeEvaluator struct {
 
 func (f *fakeEvaluator) Name() string { return "fake-evaluator" }
 
-func (f *fakeEvaluator) Evaluate(_ context.Context, _ string, scene domain.Scene, encodedChunkPath string) (domain.QualityMetrics, error) {
+func (f *fakeEvaluator) Evaluate(_ context.Context, _ string, scene domain.Scene, encodedChunkPath string, _ string) (domain.QualityMetrics, error) {
 	m := crfInName.FindStringSubmatch(encodedChunkPath)
 	if m == nil {
 		return domain.QualityMetrics{}, fmt.Errorf("cannot parse crf from %q", encodedChunkPath)
@@ -107,6 +107,31 @@ func TestBisectSceneAlwaysMet(t *testing.T) {
 	}
 	if res.Trials != 1 {
 		t.Fatalf("trials = %d, want 1", res.Trials)
+	}
+	assertOnlyBestFileRemains(t, workDir, res.BestChunkPath)
+}
+
+// TestBisectSinglePointRangeEncodesOnce はMin==Maxの縮退レンジで
+// 同一CRFの二重エンコードを行わず1試行で打ち切ることを検証する。
+func TestBisectSinglePointRangeEncodesOnce(t *testing.T) {
+	enc, ev, _ := newBisectCfg(func(int) float64 { return 50.0 }, t)
+	fe := enc.(*fakeEncoder)
+	cfg := domain.SearchConfig{
+		Codec: domain.CodecH264, Preset: "medium",
+		MinCRF: 20, MaxCRF: 20, TargetScore: 90.0,
+	}
+	workDir := t.TempDir()
+
+	res, err := BisectScene(context.Background(), enc, ev, "input.mp4",
+		domain.Scene{Index: 2, StartFrame: 200, EndFrame: 299}, cfg, workDir, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fe.calls) != 1 {
+		t.Fatalf("encode calls = %d, want 1 (no re-encode of same CRF)", len(fe.calls))
+	}
+	if res.CRF != 20 || res.MetTarget || res.Trials != 1 {
+		t.Fatalf("result = %+v, want CRF=20 MetTarget=false Trials=1", res)
 	}
 	assertOnlyBestFileRemains(t, workDir, res.BestChunkPath)
 }

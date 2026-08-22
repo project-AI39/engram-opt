@@ -1,6 +1,7 @@
 package avscenechange
 
 import (
+	"strings"
 	"testing"
 
 	"engram-opt/internal/domain"
@@ -11,7 +12,7 @@ import (
 const fixtureJSON = `{"scene_changes":[0,120],"scores":{"1":{"inter_cost":0.0,"threshold":112.8},"120":{"inter_cost":320.0,"threshold":208.8}},"frame_count":180,"speed":1277.275146354444}`
 
 func TestParseResult(t *testing.T) {
-	res, err := parseResult([]byte(fixtureJSON))
+	res, err := parseResult(strings.NewReader(fixtureJSON))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -41,7 +42,7 @@ func TestParseResultErrors(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := parseResult([]byte(tc.json)); err == nil {
+			if _, err := parseResult(strings.NewReader(tc.json)); err == nil {
 				t.Fatalf("expected error for input: %s", tc.json)
 			}
 		})

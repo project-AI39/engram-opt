@@ -74,7 +74,7 @@ func BisectScene(ctx context.Context, enc domain.VideoEncoder, ev domain.Quality
 			_ = os.Remove(out) // 失敗試行の断片を掃除
 			return domain.QualityMetrics{}, "", false, fmt.Errorf("encode crf=%d: %w", crf, err)
 		}
-		metrics, err := ev.Evaluate(ctx, inputPath, scene, out)
+		metrics, err := ev.Evaluate(ctx, inputPath, scene, out, workDir)
 		if err != nil {
 			_ = os.Remove(out)
 			return domain.QualityMetrics{}, "", false, fmt.Errorf("evaluate crf=%d: %w", crf, err)
@@ -98,6 +98,14 @@ func BisectScene(ctx context.Context, enc domain.VideoEncoder, ev domain.Quality
 	if metHi {
 		cleanupExcept(pHi, trialPaths)
 		return &Result{Scene: scene, CRF: cfg.MaxCRF, BestChunkPath: pHi, Metrics: mHi, MetTarget: true, Trials: trials}, nil
+	}
+
+	// 探索幅ゼロ（Min==Max）なら上限試行をそのまま採用する（同一CRFの再エンコード回避）。
+	if cfg.MinCRF == cfg.MaxCRF {
+		log.Printf("[engine] scene %d: single-point range (CRF %d, harmonic_mean=%.2f); adopting it as best effort",
+			scene.Index, cfg.MaxCRF, mHi.HarmonicMean)
+		cleanupExcept(pHi, trialPaths)
+		return &Result{Scene: scene, CRF: cfg.MaxCRF, BestChunkPath: pHi, Metrics: mHi, MetTarget: false, Trials: trials}, nil
 	}
 
 	// 下限CRFでも未達なら目標不可能。仕様どおり MinCRF をベストエフォートで採用する。

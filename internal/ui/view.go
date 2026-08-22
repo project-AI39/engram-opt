@@ -210,9 +210,16 @@ func (m Model) renderSummary() string {
 
 	// サイズ削減（実ファイル計測に成功した場合のみ）
 	if m.inSize > 0 && m.outSize > 0 {
+		delta := 100 * (1 - float64(m.outSize)/float64(m.inSize))
+		sign := "-"
+		if delta < 0 {
+			// 大きくなった場合は増加として正直に表示する
+			sign = "+"
+			delta = -delta
+		}
 		b.WriteString(fmt.Sprintf("サイズ: %.2f MB → %.2f MB (%s)\n",
 			float64(m.inSize)/(1<<20), float64(m.outSize)/(1<<20),
-			hitStyle.Render(fmt.Sprintf("-%.1f%%", 100*(1-float64(m.outSize)/float64(m.inSize))))))
+			hitStyle.Render(fmt.Sprintf("%s%.1f%%", sign, delta))))
 	}
 
 	if r != nil && len(r.Results) > 0 {

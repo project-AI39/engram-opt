@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -87,7 +88,9 @@ Use --shot N for a debug run of a single scene's CRF search
 			if terr != nil {
 				return terr
 			}
-			jobDir := filepath.Join(tmpRoot, time.Now().Format("20060102-150405"))
+			// 同一秒起動の別プロセスとjobDirを共有しないようPID接尾辞を付す
+			jobDir := newJobDir(tmpRoot)
+			sweepStaleJobs(tmpRoot)
 
 			cfg, err := buildSearchConfig(codec, preset)
 			if err != nil {
@@ -205,6 +208,50 @@ func newOrchestrator(audio domain.AudioMode) *engine.Orchestrator {
 	}
 }
 
+// newJobDir はジョブ専用の一時ディレクトリパスを返す。
+// PID接尾辞により同一秒起動の別プロセスとの衝突（同名チャンクの相互上書き）を防ぐ。
+// 平文/TUI/ウィザード全起動経路で必ずこれを使うこと。
+func newJobDir(tmpRoot string) string {
+	return filepath.Join(tmpRoot,
+		fmt.Sprintf("%s-p%d", time.Now().Format("20060102-150405"), os.Getpid()))
+}
+
+// sweepStaleJobs は tmpRoot 内で72時間より古いジョブディレクトリを掃除する（ベストエフォート）。
+// クラッシュ等で失敗時に残したtmpが無人長時間運用中に単調増加するのを防ぐ。
+func sweepStaleJobs(tmpRoot string) {
+	entries, err := os.ReadDir(tmpRoot)
+	if err != nil {
+		return // tmpが未作成など。致命的ではない
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		ts, ok := jobTimestampOf(e.Name())
+		if !ok || time.Since(ts) < 72*time.Hour {
+			continue
+		}
+		p := filepath.Join(tmpRoot, e.Name())
+		if err := os.RemoveAll(p); err != nil {
+			log.Printf("[optimize] warning: failed to sweep stale temp dir: %v", err)
+		} else {
+			log.Printf("[optimize] swept stale temp dir (older than 72h): %s", p)
+		}
+	}
+}
+
+// jobTimestampOf はジョブディレクトリ名先頭の "20060102-150405" 接頭辞を解釈する。
+func jobTimestampOf(name string) (time.Time, bool) {
+	if len(name) < 15 {
+		return time.Time{}, false
+	}
+	t, err := time.ParseInLocation("20060102-150405", name[:15], time.Local)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
 // defaultOutputPathIfEmpty は出力未指定時に <入力>.opt.mkv へ解決する。
 func defaultOutputPathIfEmpty(output, input string) string {
 	if output != "" {
@@ -222,19 +269,22 @@ func orchRun(ctx context.Context, input, outPath, jobDir string, cfg domain.Sear
 		OnSceneStart: func(i, total int) {
 			log.Printf("[optimize] shot %d/%d start", i+1, total)
 		},
-		OnTrial: func(tr engine.Trial) {
-			status := "MISS"
-			if tr.MetTarget {
-				status = "HIT "
-			}
-			log.Printf("[optimize] shot %d trial crf=%2d harmonic_mean=%6.2f min=%6.2f [%s]",
-				tr.Scene.Index, tr.CRF, tr.Metrics.HarmonicMean, tr.Metrics.Min, status)
-		},
+		OnTrial: logTrial,
 		OnSceneDone: func(i, _ int, r *engine.Result) {
 			log.Printf("[optimize] shot %d done: crf=%d met=%v trials=%d",
 				i, r.CRF, r.MetTarget, r.Trials)
 		},
 	})
+}
+
+// logTrial は試行1回分の平文進捗ログ（orchRun / runShotDebug 共用）。
+func logTrial(tr engine.Trial) {
+	status := "MISS"
+	if tr.MetTarget {
+		status = "HIT "
+	}
+	log.Printf("[optimize] shot %d trial crf=%2d harmonic_mean=%6.2f min=%6.2f [%s]",
+		tr.Scene.Index, tr.CRF, tr.Metrics.HarmonicMean, tr.Metrics.Min, status)
 }
 
 // buildSearchConfig はCLIフラグ値から探索設定を構築する。
@@ -274,15 +324,7 @@ func runShotDebug(ctx context.Context, input string, idx int, cfg domain.SearchC
 		return fmt.Errorf("creating shot dir: %w", err)
 	}
 
-	res, err := engine.BisectScene(ctx, ffenc.New(), libvmaf.New(), input, sc, cfg, shotDir,
-		func(tr engine.Trial) {
-			status := "MISS"
-			if tr.MetTarget {
-				status = "HIT "
-			}
-			log.Printf("[optimize] shot %d trial crf=%2d harmonic_mean=%6.2f min=%6.2f [%s]",
-				sc.Index, tr.CRF, tr.Metrics.HarmonicMean, tr.Metrics.Min, status)
-		})
+	res, err := engine.BisectScene(ctx, ffenc.New(), libvmaf.New(), input, sc, cfg, shotDir, logTrial)
 	if err != nil {
 		return err
 	}
@@ -294,6 +336,7 @@ func runShotDebug(ctx context.Context, input string, idx int, cfg domain.SearchC
 
 // ensureOutside は output が jobDir 配下でないことを確認する。
 // 成功時には jobDir を丸ごと削除するため、配下にあると成果物も消えてしまう。
+// Windowsではパス大小文字を同一視する（C:\a と c:\A は同一）。
 func ensureOutside(jobDir, output string) error {
 	absJob, err := filepath.Abs(jobDir)
 	if err != nil {
@@ -302,6 +345,9 @@ func ensureOutside(jobDir, output string) error {
 	absOut, err := filepath.Abs(output)
 	if err != nil {
 		return err
+	}
+	if runtime.GOOS == "windows" {
+		absJob, absOut = strings.ToLower(absJob), strings.ToLower(absOut)
 	}
 	rel, err := filepath.Rel(absJob, absOut)
 	if err == nil && !strings.HasPrefix(rel, "..") {

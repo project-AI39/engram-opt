@@ -57,14 +57,17 @@ func TestOrchestratorAudioMuxFlow(t *testing.T) {
 		t.Fatalf("concat target = %q, want %q", enc.concatTargets[0], intermediate)
 	}
 
-	// muxは1回・引数は（中間映像, 元入力, モード, 最終出力）
+	// muxは1回・引数は（中間映像, 元入力, モード, ステージング出力）。
+	// 最終確定はステージング→renameで行われるため、muxの書き先は
+	// 出力と同一ディレクトリの .part-<pid> 付き隠しファイルになる。
 	if len(muxer.calls) != 1 {
 		t.Fatalf("mux calls = %d", len(muxer.calls))
 	}
 	c := muxer.calls[0]
+	wantStaged := filepath.Join(filepath.Dir(output), ".final.part-")
 	if c.videoPath != intermediate || c.originalPath != "in.mp4" ||
-		c.mode != domain.AudioOpus || c.outputPath != output {
-		t.Fatalf("mux call = %+v", c)
+		c.mode != domain.AudioOpus || !strings.HasPrefix(c.outputPath, wantStaged) {
+		t.Fatalf("mux call = %+v (want staged prefix %q)", c, wantStaged)
 	}
 	if _, err := os.Stat(output); err != nil {
 		t.Fatalf("final output missing: %v", err)
