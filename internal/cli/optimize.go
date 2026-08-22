@@ -52,12 +52,11 @@ func registerRun(root *cobra.Command) {
 
 	root.Args = cobra.MaximumNArgs(1)
 	root.RunE = func(cmd *cobra.Command, args []string) error {
-		if len(args) == 0 {
-			// 裸起動: 端末ならウィザード、非端末ならヘルプ
-			return bareRunE(cmd)
-		}
 		ctx := cmd.Context()
-		input := args[0]
+		var input string
+		if len(args) > 0 {
+			input = args[0]
+		}
 
 		// --log-file: 無人実行向けにログをファイルへも二重化する
 		var logSink io.Writer // --tui 時は ui.Options.LogMirror に渡し、表示中も二重化を維持する
@@ -76,6 +75,10 @@ func registerRun(root *cobra.Command) {
 		mode, merr := decideLaunch(len(args) > 0, ui.IsTerminal(), tui, headless)
 		if merr != nil {
 			return merr
+		}
+		if mode == launchHelp {
+			// 非対話環境での裸起動（パイプ/CI/リダイレクト）。実行せずヘルプのみ表示する
+			return cmd.Help()
 		}
 
 		tmpRoot, terr := toolbin.TempRoot()
@@ -98,11 +101,15 @@ func registerRun(root *cobra.Command) {
 
 		// デバッグモード: 単一シーンの二分探索のみ（結合しない）。フラグ専用でウィザード対象外。
 		if shot >= 0 {
+			if input == "" {
+				return fmt.Errorf("--shot requires an input video path")
+			}
 			return runShotDebug(ctx, input, shot, cfg, jobDir)
 		}
 
 		switch mode {
 		case launchWizard:
+			// ウィザード（裸起動＋端末）。フラグ値は各項目の初期値として反映される
 			return launchWizardMode(ctx, input, output, cfg, audioMode, logSink)
 
 		case launchTUI:
@@ -160,6 +167,7 @@ const (
 	launchPlain  launchMode = iota // 平文ログで即実行
 	launchTUI                      // 実行ダッシュボード付き（--tui 明示時）
 	launchWizard                   // 設定ウィザードから開始（引数なし＋端末）
+	launchHelp                     // ヘルプ表示のみ（引数なし・非対話環境）
 )
 
 // decideLaunch は引数有無・TTY・フラグから起動モードを決定する。
@@ -167,7 +175,7 @@ const (
 // ルール:
 //   - --headless は常に平文ログ（--tui とは排他）。入力必須
 //   - 端末かつ入力なし → ウィザード（ダブルクリック/裸起動の正規フロー）
-//   - 端末以外（パイプ/CI/リダイレクト）では対話UIを出さない
+//   - 端末以外（パイプ/CI/リダイレクト）では対話UIを出さない。入力なしの裸起動はヘルプ表示
 //   - 入力あり＋端末での --tui のみダッシュボード。それ以外の入力ありは即実行
 func decideLaunch(hasInput, tty, tuiFlag, headless bool) (launchMode, error) {
 	switch {
@@ -181,7 +189,7 @@ func decideLaunch(hasInput, tty, tuiFlag, headless bool) (launchMode, error) {
 	case !hasInput && tty:
 		return launchWizard, nil
 	case !hasInput:
-		return launchPlain, fmt.Errorf("input video is required in non-interactive sessions")
+		return launchHelp, nil
 	case tuiFlag && tty:
 		return launchTUI, nil
 	default:

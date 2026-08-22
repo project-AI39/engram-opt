@@ -15,7 +15,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"engram-opt/internal/domain"
 	"engram-opt/internal/ui"
 )
 
@@ -80,18 +79,4 @@ func ExecuteSetup() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return NewSetupCmd().ExecuteContext(ctx)
-}
-
-// bareRunE は引数なし起動の挙動（ウィザード or ヘルプ）を返す。
-// registerRun の RunE から、入力が空の場合のフォールバックとして使う。
-func bareRunE(cmd *cobra.Command) error {
-	// ダブルクリック/裸起動＋端末なら設定ウィザードへ（memo.md「TUIウィザード化」）
-	if ui.IsTerminal() {
-		cfg, cerr := buildSearchConfig(string(domain.CodecH264), "medium", "")
-		if cerr != nil {
-			return cerr
-		}
-		return launchWizardMode(cmd.Context(), "", "", cfg, domain.DefaultAudioMode, nil)
-	}
-	return cmd.Help()
 }
