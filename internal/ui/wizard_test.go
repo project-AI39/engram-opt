@@ -88,6 +88,19 @@ func TestWizardDepthAndAudioCycling(t *testing.T) {
 	m, _ = step(t, m, keyTab()) // min crf
 	m, _ = step(t, m, keyTab()) // max crf
 	m, _ = step(t, m, keyTab()) // target
+	if m.wiz.focus != fTarget {
+		t.Fatalf("focus = %d, want fTarget", m.wiz.focus)
+	}
+	m, _ = step(t, m, keyTab()) // metric
+	if got := m.wiz.metric(); got != domain.MetricHarmonic {
+		t.Fatalf("initial metric = %s, want harmonic", got)
+	}
+	for i, want := range []domain.ScoreMetric{domain.MetricMean, domain.MetricMin, domain.MetricHarmonic} {
+		m, _ = step(t, m, keyRight())
+		if got := m.wiz.metric(); got != want {
+			t.Fatalf("metric[%d] = %s, want %s", i, got, want)
+		}
+	}
 	m, _ = step(t, m, keyTab()) // depth
 	if m.wiz.depth() != 10 {
 		t.Fatalf("initial depth = %d, want 10", m.wiz.depth())
@@ -279,13 +292,14 @@ func TestWizardConfirmInvokesFactoryAndTransitions(t *testing.T) {
 		}, nil
 	}
 
-	// 実値を編集: CRF 15-36→18-32、目標95→92.5、深度10→8、プリセット medium→slow
+	// 実値を編集: CRF 15-36→18-32、目標95→92.5、深度10→8、プリセット medium→slow、指標 harmonic→mean
 	m.wiz.input.SetValue(in)
 	m.wiz.output.SetValue("")
 	m.wiz.minCRF.SetValue("18")
 	m.wiz.maxCRF.SetValue("32")
 	m.wiz.target.SetValue("92.5")
 	m.wiz.presetIdx = 6 // slow
+	m.wiz.metricIdx = indexOf(metricLabels(), string(domain.MetricMean))
 
 	next, cmd := m.Update(keyEnter())
 	m = next.(Model)
@@ -315,6 +329,7 @@ func TestWizardConfirmInvokesFactoryAndTransitions(t *testing.T) {
 		TargetScore: 92.5,
 		Preset:      "slow",
 		BitDepth:    10,
+		Metric:      domain.MetricMean,
 	}
 	if gotCfg != wantCfg || gotAudio != domain.AudioCopy {
 		t.Fatalf("factory cfg/audio = %+v / %s, want %+v / copy", gotCfg, gotAudio, wantCfg)

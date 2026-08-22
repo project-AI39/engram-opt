@@ -36,6 +36,7 @@ func launchWizardMode(ctx context.Context, input, output string, cfg domain.Sear
 		MinCRF:     cfg.MinCRF,
 		MaxCRF:     cfg.MaxCRF,
 		BitDepth:   cfg.BitDepth,
+		Metric:     string(cfg.EffectiveMetric()),
 		Audio:      string(audio),
 		LogMirror:  logSink,
 	}
@@ -87,7 +88,11 @@ func printSummary(input string, r *engine.PipelineReport) {
 			met++
 		}
 	}
-	log.Printf("[optimize] %d/%d shot(s) met target score", met, len(r.Results))
+	metric := r.Metric
+	if metric == "" {
+		metric = domain.MetricHarmonic
+	}
+	log.Printf("[optimize] %d/%d shot(s) met target score (metric=%s)", met, len(r.Results), metric)
 
 	var inSize, outSize int64
 	if st, err := os.Stat(input); err == nil {

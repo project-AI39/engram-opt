@@ -71,7 +71,7 @@ func ExecuteSetup() error {
 func bareRunE(cmd *cobra.Command) error {
 	// ダブルクリック/裸起動＋端末なら設定ウィザードへ（memo.md「TUIウィザード化」）
 	if ui.IsTerminal() {
-		cfg, cerr := buildSearchConfig(string(domain.CodecH264), "medium")
+		cfg, cerr := buildSearchConfig(string(domain.CodecH264), "medium", "")
 		if cerr != nil {
 			return cerr
 		}

@@ -52,6 +52,8 @@ func BisectScene(ctx context.Context, enc domain.VideoEncoder, ev domain.Quality
 	}
 	// 出力ビット深度の正規化（0は「未指定」＝既定10）。旧テストのリテラル互換のため。
 	paramsBitDepth := cfg.EffectiveBitDepth()
+	// 合否指標の正規化（空は「未指定」＝既定harmonic_mean）。
+	metric := cfg.EffectiveMetric()
 	if err := scene.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid scene: %w", err)
 	}
@@ -80,7 +82,7 @@ func BisectScene(ctx context.Context, enc domain.VideoEncoder, ev domain.Quality
 			return domain.QualityMetrics{}, "", false, fmt.Errorf("evaluate crf=%d: %w", crf, err)
 		}
 		trialPaths = append(trialPaths, out)
-		met := metrics.TargetMet(cfg.TargetScore)
+		met := metrics.TargetMet(cfg.EffectiveMetric(), cfg.TargetScore)
 		if observe != nil {
 			observe(Trial{Scene: scene, CRF: crf, Metrics: metrics, MetTarget: met})
 		}
@@ -102,8 +104,8 @@ func BisectScene(ctx context.Context, enc domain.VideoEncoder, ev domain.Quality
 
 	// 探索幅ゼロ（Min==Max）なら上限試行をそのまま採用する（同一CRFの再エンコード回避）。
 	if cfg.MinCRF == cfg.MaxCRF {
-		log.Printf("[engine] scene %d: single-point range (CRF %d, harmonic_mean=%.2f); adopting it as best effort",
-			scene.Index, cfg.MaxCRF, mHi.HarmonicMean)
+		log.Printf("[engine] scene %d: single-point range (CRF %d, %s=%.2f); adopting it as best effort",
+			scene.Index, cfg.MaxCRF, metric, mHi.Score(metric))
 		cleanupExcept(pHi, trialPaths)
 		return &Result{Scene: scene, CRF: cfg.MaxCRF, BestChunkPath: pHi, Metrics: mHi, MetTarget: false, Trials: trials}, nil
 	}
@@ -116,8 +118,8 @@ func BisectScene(ctx context.Context, enc domain.VideoEncoder, ev domain.Quality
 	trials++
 	result := &Result{Scene: scene, CRF: cfg.MinCRF, BestChunkPath: pLo, Metrics: mLo, MetTarget: metLo, Trials: trials}
 	if !metLo {
-		log.Printf("[engine] scene %d: target %.2f unreachable even at CRF %d (harmonic_mean=%.2f); adopting minimum CRF",
-			scene.Index, cfg.TargetScore, cfg.MinCRF, mLo.HarmonicMean)
+		log.Printf("[engine] scene %d: target %.2f unreachable even at CRF %d (%s=%.2f); adopting minimum CRF",
+			scene.Index, cfg.TargetScore, cfg.MinCRF, metric, mLo.Score(metric))
 		cleanupExcept(result.BestChunkPath, trialPaths)
 		return result, nil
 	}

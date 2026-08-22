@@ -76,11 +76,19 @@ const (
 	fMinCRF
 	fMaxCRF
 	fTarget
+	fMetric
 	fDepth
 	fAudio
 	fOutput
 	fieldCount
 )
+
+// metricChoices は合否指標の実値（先頭が既定）。
+var metricChoices = []domain.ScoreMetric{
+	domain.MetricHarmonic,
+	domain.MetricMean,
+	domain.MetricMin,
+}
 
 // wizardForm はsetupフェーズのフォーム状態。
 type wizardForm struct {
@@ -95,6 +103,7 @@ type wizardForm struct {
 	codecIdx   int
 	presetList []string // 現在のコーデックに応じた実値リスト（切替時に再構築）
 	presetIdx  int
+	metricIdx  int
 	depthIdx   int
 	audioIdx   int
 
@@ -179,6 +188,7 @@ func newWizardForm(opts Options) wizardForm {
 			break
 		}
 	}
+	w.metricIdx = indexOf(metricLabels(), string(opts.Metric))
 	return w
 }
 
@@ -187,6 +197,15 @@ func audioLabels() []string {
 	list := make([]string, len(audioChoices))
 	for i, a := range audioChoices {
 		list[i] = string(a)
+	}
+	return list
+}
+
+// metricLabels は合否指標の実値一覧。
+func metricLabels() []string {
+	list := make([]string, len(metricChoices))
+	for i, m := range metricChoices {
+		list[i] = string(m)
 	}
 	return list
 }
@@ -201,13 +220,17 @@ func indexOf(list []string, v string) int {
 }
 
 func (w *wizardForm) isSelectField() bool {
-	return w.focus == fCodec || w.focus == fPreset || w.focus == fDepth || w.focus == fAudio
+	return w.focus == fCodec || w.focus == fPreset || w.focus == fMetric ||
+		w.focus == fDepth || w.focus == fAudio
 }
 
 func (w *wizardForm) isTextField() bool { return !w.isSelectField() }
 
-// preset / depth / audio は現在選択中の実値を返す。
-func (w *wizardForm) preset() string          { return w.presetList[w.presetIdx] }
+// preset / metric / depth / audio は現在選択中の実値を返す。
+func (w *wizardForm) preset() string { return w.presetList[w.presetIdx] }
+func (w *wizardForm) metric() domain.ScoreMetric {
+	return metricChoices[w.metricIdx]
+}
 func (w *wizardForm) depth() int              { return depthChoices[w.depthIdx] }
 func (w *wizardForm) audio() domain.AudioMode { return audioChoices[w.audioIdx] }
 
@@ -274,6 +297,8 @@ func (m Model) stepField(dir int) (Model, tea.Cmd) {
 		w.resetPresetList() // コーデック切替時はPresetを当該既定へリセット
 	case fPreset:
 		w.presetIdx = mod(w.presetIdx+dir, len(w.presetList))
+	case fMetric:
+		w.metricIdx = mod(w.metricIdx+dir, len(metricChoices))
 	case fDepth:
 		w.depthIdx = mod(w.depthIdx+dir, len(depthChoices))
 	case fAudio:
@@ -381,6 +406,7 @@ func (w *wizardForm) buildConfig() (domain.SearchConfig, error) {
 		TargetScore: tgt,
 		Preset:      w.preset(),
 		BitDepth:    w.depth(),
+		Metric:      w.metric(),
 	}
 	if err := cfg.Validate(); err != nil {
 		return domain.SearchConfig{}, err
@@ -463,6 +489,7 @@ func renderSetup(m Model) string {
 		row("Min CRF:", w.focus == fMinCRF, w.minCRF.View()),
 		row("Max CRF:", w.focus == fMaxCRF, w.maxCRF.View()),
 		row("Target VMAF:", w.focus == fTarget, w.target.View()),
+		row("Metric:", w.focus == fMetric, selectValue(string(w.metric()), w.focus == fMetric)),
 	)
 	d := w.depth()
 	rows = append(rows,

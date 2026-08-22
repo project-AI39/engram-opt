@@ -43,6 +43,7 @@ func registerRun(root *cobra.Command) {
 		shot     int
 		codec    string
 		preset   string
+		metric   string
 		audio    string
 		tui      bool
 		headless bool
@@ -85,7 +86,7 @@ func registerRun(root *cobra.Command) {
 		jobDir := newJobDir(tmpRoot)
 		sweepStaleJobs(tmpRoot)
 
-		cfg, err := buildSearchConfig(codec, preset)
+		cfg, err := buildSearchConfig(codec, preset, metric)
 		if err != nil {
 			return err
 		}
@@ -143,6 +144,7 @@ func registerRun(root *cobra.Command) {
 	f.IntVar(&shot, "shot", -1, "debug: run CRF search on this scene index only")
 	f.StringVar(&codec, "codec", string(domain.CodecH264), "encode codec: h264 | hevc | av1")
 	f.StringVar(&preset, "preset", "medium", "encoder preset (identical across all trials)")
+	f.StringVar(&metric, "metric", string(domain.MetricHarmonic), "target score basis: harmonic | mean | min")
 	f.StringVar(&audio, "audio", string(domain.DefaultAudioMode), "final audio track: copy | opus | aac | none")
 	f.BoolVar(&headless, "headless", false, "never show any interactive UI (plain logs only)")
 	f.BoolVar(&tui, "tui", false, "show interactive dashboard (falls back to plain logs when stdout is not a terminal)")
@@ -259,7 +261,7 @@ func orchRun(ctx context.Context, input, outPath, jobDir string, cfg domain.Sear
 		OnSceneStart: func(i, total int) {
 			log.Printf("[optimize] shot %d/%d start", i+1, total)
 		},
-		OnTrial: logTrial,
+		OnTrial: trialLogger(cfg),
 		OnSceneDone: func(i, _ int, r *engine.Result) {
 			log.Printf("[optimize] shot %d done: crf=%d met=%v trials=%d",
 				i, r.CRF, r.MetTarget, r.Trials)
@@ -267,24 +269,37 @@ func orchRun(ctx context.Context, input, outPath, jobDir string, cfg domain.Sear
 	})
 }
 
-// logTrial は試行1回分の平文進捗ログ（orchRun / runShotDebug 共用）。
-func logTrial(tr engine.Trial) {
-	status := "MISS"
-	if tr.MetTarget {
-		status = "HIT "
+// trialLogger は試行1回分の平文進捗ログ（orchRun / runShotDebug 共用）。
+// 基準指標の値を先頭に、参考として min も併記する。
+func trialLogger(cfg domain.SearchConfig) engine.Observer {
+	metric := cfg.EffectiveMetric()
+	return func(tr engine.Trial) {
+		status := "MISS"
+		if tr.MetTarget {
+			status = "HIT "
+		}
+		log.Printf("[optimize] shot %d trial crf=%2d %s=%6.2f (min=%6.2f) [%s]",
+			tr.Scene.Index, tr.CRF, metric, tr.Metrics.Score(metric), tr.Metrics.Min, status)
 	}
-	log.Printf("[optimize] shot %d trial crf=%2d harmonic_mean=%6.2f min=%6.2f [%s]",
-		tr.Scene.Index, tr.CRF, tr.Metrics.HarmonicMean, tr.Metrics.Min, status)
 }
 
 // buildSearchConfig はCLIフラグ値から探索設定を構築する。
-func buildSearchConfig(codecName, preset string) (domain.SearchConfig, error) {
+// metricName は "harmonic" | "mean" | "min"（空は既定harmonic）。
+func buildSearchConfig(codecName, preset, metricName string) (domain.SearchConfig, error) {
 	c := domain.VideoCodec(codecName)
 	switch c {
 	case domain.CodecH264, domain.CodecHEVC, domain.CodecAV1:
 		// OK
 	default:
 		return domain.SearchConfig{}, fmt.Errorf("unsupported codec %q (use h264 | hevc | av1)", codecName)
+	}
+	var metric domain.ScoreMetric
+	if metricName != "" && metricName != string(domain.MetricHarmonic) {
+		m, err := domain.ParseScoreMetric(metricName)
+		if err != nil {
+			return domain.SearchConfig{}, err
+		}
+		metric = m
 	}
 	return domain.SearchConfig{
 		Codec:       c,
@@ -293,6 +308,7 @@ func buildSearchConfig(codecName, preset string) (domain.SearchConfig, error) {
 		TargetScore: domain.DefaultTargetScore,
 		Preset:      preset,
 		BitDepth:    domain.DefaultBitDepth,
+		Metric:      metric,
 	}, nil
 }
 
@@ -314,12 +330,13 @@ func runShotDebug(ctx context.Context, input string, idx int, cfg domain.SearchC
 		return fmt.Errorf("creating shot dir: %w", err)
 	}
 
-	res, err := engine.BisectScene(ctx, ffenc.New(), libvmaf.New(), input, sc, cfg, shotDir, logTrial)
+	res, err := engine.BisectScene(ctx, ffenc.New(), libvmaf.New(), input, sc, cfg, shotDir, trialLogger(cfg))
 	if err != nil {
 		return err
 	}
-	log.Printf("[optimize] shot %d RESULT: crf=%d met=%v trials=%d harmonic_mean=%.2f",
-		sc.Index, res.CRF, res.MetTarget, res.Trials, res.Metrics.HarmonicMean)
+	metric := cfg.EffectiveMetric()
+	log.Printf("[optimize] shot %d RESULT: crf=%d met=%v trials=%d %s=%.2f",
+		sc.Index, res.CRF, res.MetTarget, res.Trials, metric, res.Metrics.Score(metric))
 	log.Printf("[optimize] best chunk kept at: %s", res.BestChunkPath)
 	return nil
 }

@@ -25,11 +25,12 @@ type EncodeParams struct {
 // SearchConfig CRF二分探索の全体設定。
 type SearchConfig struct {
 	Codec       VideoCodec
-	MinCRF      int     // 探索下限（既定15）
-	MaxCRF      int     // 探索上限（既定36）
-	TargetScore float64 // 合否目標スコア（既定95.0、harmonic_mean基準）
-	Preset      string  // 探索中の全試行で一律固定するpreset
-	BitDepth    int     // 出力ビット深度（既定10。0は「未指定」扱いでDefaultBitDepthへ正規化される）
+	MinCRF      int         // 探索下限（既定15）
+	MaxCRF      int         // 探索上限（既定36）
+	TargetScore float64     // 合否目標スコア（既定95.0。基準指標はMetricで決まる）
+	Preset      string      // 探索中の全試行で一律固定するpreset
+	BitDepth    int         // 出力ビット深度（既定10。0は「未指定」扱いでDefaultBitDepthへ正規化される）
+	Metric      ScoreMetric // 合否判定に使うVMAF統計（既定harmonic_mean）
 }
 
 // 探索パラメータの既定値（memo.md「パラメータ一覧と露出方針」）。
@@ -69,7 +70,21 @@ func (c SearchConfig) Validate() error {
 	default:
 		return fmt.Errorf("unsupported bit depth %d (use 8 or 10)", c.BitDepth)
 	}
+	switch c.Metric {
+	case "", MetricHarmonic, MetricMean, MetricMin:
+		// ""は未指定扱い（EffectiveMetricで既定harmonicへ正規化）
+	default:
+		return fmt.Errorf("unsupported score metric %q (use harmonic | mean | min)", c.Metric)
+	}
 	return nil
+}
+
+// EffectiveMetric は正規化後の合否指標を返す（ゼロ値→MetricHarmonic）。
+func (c SearchConfig) EffectiveMetric() ScoreMetric {
+	if c.Metric == "" {
+		return MetricHarmonic
+	}
+	return c.Metric
 }
 
 // EffectiveBitDepth は正規化後の出力ビット深度を返す（0→DefaultBitDepth）。

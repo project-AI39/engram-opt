@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"engram-opt/internal/domain"
 	"engram-opt/internal/engine"
 )
 
@@ -23,6 +24,23 @@ func (m Model) View() string {
 		return m.renderSummary()
 	default:
 		return m.renderDashboard()
+	}
+}
+
+// metricShort は表示用の指標短縮名（列ヘッダ等）。
+func (m Model) metricShort() string {
+	return shortMetricName(m.opts.Metric)
+}
+
+// shortMetricName は ScoreMetric 文字列の短縮名（harmonic→harm）。
+func shortMetricName(s string) string {
+	switch domain.ScoreMetric(s) {
+	case domain.MetricMean:
+		return "mean"
+	case domain.MetricMin:
+		return "min"
+	default:
+		return "harm"
 	}
 }
 
@@ -86,7 +104,7 @@ func (m Model) renderDashboard() string {
 	// シーン一覧
 	if m.total > 0 {
 		b.WriteString("\n" + m.sectionTitle("SHOTS") + "\n")
-		b.WriteString(dashboardHeaderRow() + "\n")
+		b.WriteString(m.dashHeader() + "\n")
 		for _, sc := range m.scenes {
 			row := sceneRow{index: sc.Index, start: sc.StartFrame, end: sc.EndFrame}
 			b.WriteString(m.renderRow(row) + "\n")
@@ -126,8 +144,12 @@ type tableCol struct {
 	label string
 }
 
-var dashCols = []tableCol{
-	{7, "SHOT"}, {14, "FRAMES"}, {8, "STATUS"}, {6, "CRF"}, {12, "VMAF(harm)"}, {6, "LAST"},
+// dashCols は実行テーブルの列定義。VMAF列は選択中の合否指標名を反映する。
+func (m Model) dashCols() []tableCol {
+	return []tableCol{
+		{7, "SHOT"}, {14, "FRAMES"}, {8, "STATUS"}, {6, "CRF"},
+		{12, fmt.Sprintf("VMAF(%s)", m.metricShort())}, {6, "LAST"},
+	}
 }
 
 func renderTableHeader(cols []tableCol) string {
@@ -138,11 +160,8 @@ func renderTableHeader(cols []tableCol) string {
 	return headerStyle.Render(strings.Join(cells, ""))
 }
 
-func dashboardHeaderRow() string {
-	return renderTableHeader(dashCols)
-}
-
-// renderRow は1シーン分の行を描画する。
+// dashHeader は実行テーブルの見出し行（指標名を含むためModelが必要）。
+func (m Model) dashHeader() string { return renderTableHeader(m.dashCols()) } // renderRow は1シーン分の行を描画する。
 // STATUS は状態アイコン、LAST は直近試行の合否（確定後は試行回数）を表示する。
 // 各セルは「先に固定幅へパディングしてから着色」する——逆順だとANSIエスケープが
 // パディング幅に算入され、色違いのセルで桁が揃わなくなる。
@@ -329,8 +348,17 @@ func (m Model) renderSummary() string {
 
 	// 結果テーブル
 	if r != nil && len(r.Results) > 0 {
+		metric := domain.MetricHarmonic
+		if r.Metric != "" {
+			metric = r.Metric
+		} else if m.opts.Metric != "" {
+			metric = domain.ScoreMetric(m.opts.Metric)
+		}
 		b.WriteString("\n" + m.sectionTitle("RESULTS") + "\n")
-		cols := []tableCol{{7, "SHOT"}, {14, "FRAMES"}, {6, "CRF"}, {12, "VMAF(harm)"}, {6, "MET"}}
+		cols := []tableCol{
+			{7, "SHOT"}, {14, "FRAMES"}, {6, "CRF"},
+			{12, fmt.Sprintf("VMAF(%s)", shortMetricName(string(metric)))}, {6, "MET"},
+		}
 		b.WriteString(renderTableHeader(cols) + "\n")
 		for _, res := range r.Results {
 			metSt := missStyle
@@ -343,7 +371,7 @@ func (m Model) renderSummary() string {
 				cell(7, fmt.Sprint(res.Scene.Index), valueStyle),
 				cell(14, fmt.Sprintf("%d-%d", res.Scene.StartFrame, res.Scene.EndFrame), dimStyle),
 				cell(6, fmt.Sprint(res.CRF), valueStyle),
-				cell(12, fmt.Sprintf("%.2f", res.Metrics.HarmonicMean), valueStyle),
+				cell(12, fmt.Sprintf("%.2f", res.Metrics.Score(metric)), valueStyle),
 				cell(6, metTxt, metSt),
 			}, "")
 			b.WriteString(row + "\n")

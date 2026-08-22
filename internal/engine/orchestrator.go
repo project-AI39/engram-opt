@@ -44,7 +44,8 @@ type PipelineReport struct {
 	Scenes      []domain.Scene
 	Results     []*Result // シーン順
 	OutputPath  string
-	TotalTrials int // 全シーン合計の試行回数
+	TotalTrials int                // 全シーン合計の試行回数
+	Metric      domain.ScoreMetric // 合否判定に使われた基準指標（表示用）
 }
 
 // Run パイプラインを実行し、完成動画を outputPath へ出力する。
@@ -177,6 +178,7 @@ func (o *Orchestrator) run(ctx context.Context, inputPath, outputPath, workDir s
 		Results:     results,
 		OutputPath:  outputPath,
 		TotalTrials: sumTrials,
+		Metric:      cfg.EffectiveMetric(),
 	}, nil
 }
 

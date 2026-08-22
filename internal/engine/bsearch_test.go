@@ -136,6 +136,73 @@ func TestBisectSinglePointRangeEncodesOnce(t *testing.T) {
 	assertOnlyBestFileRemains(t, workDir, res.BestChunkPath)
 }
 
+// spreadEvaluator は3指標に幅を持たせたスコアを返す（指標選択の検証用）。
+// score(crf)=110-crf に対し mean=+2 / min=-8 のオフセットを付ける。
+type spreadEvaluator struct{}
+
+func (spreadEvaluator) Name() string { return "spread" }
+
+func (spreadEvaluator) Evaluate(_ context.Context, _ string, _ domain.Scene, encodedChunkPath string, _ string) (domain.QualityMetrics, error) {
+	m := crfInName.FindStringSubmatch(encodedChunkPath)
+	if m == nil {
+		return domain.QualityMetrics{}, fmt.Errorf("cannot parse crf from %q", encodedChunkPath)
+	}
+	crf, err := strconv.Atoi(m[1])
+	if err != nil {
+		return domain.QualityMetrics{}, err
+	}
+	score := float64(110 - crf)
+	return domain.QualityMetrics{HarmonicMean: score, Mean: score + 2, Min: score - 8}, nil
+}
+
+// TestBisectMetricSelection は同一スコア分布でも合否指標ごとに採用CRFが変わることを検証する。
+// target=90 / score(crf)=110-crf のとき:
+//
+//	harmonic >= 90 → crf <= 20
+//	mean     >= 90 → crf <= 22
+//	min      >= 90 → 到達不能（MinCRFベストエフォート・未達）
+func TestBisectMetricSelection(t *testing.T) {
+	scene := domain.Scene{Index: 0, StartFrame: 0, EndFrame: 99}
+	base := domain.SearchConfig{
+		Codec: domain.CodecH264, MinCRF: 15, MaxCRF: 36,
+		TargetScore: 90.0, Preset: "medium",
+	}
+	enc := &fakeEncoder{}
+	workDir := t.TempDir()
+
+	for _, tc := range []struct {
+		metric  domain.ScoreMetric
+		wantCRF int
+	}{
+		{domain.MetricHarmonic, 20},
+		{domain.MetricMean, 22},
+	} {
+		t.Run(string(tc.metric), func(t *testing.T) {
+			cfg := base
+			cfg.Metric = tc.metric
+			res, err := BisectScene(context.Background(), enc, spreadEvaluator{}, "in.mp4", scene, cfg, workDir, nil)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if res.CRF != tc.wantCRF || !res.MetTarget {
+				t.Fatalf("%s: result = %+v, want CRF=%d met=true", tc.metric, res, tc.wantCRF)
+			}
+		})
+	}
+
+	t.Run("min unreachable adopts min crf", func(t *testing.T) {
+		cfg := base
+		cfg.Metric = domain.MetricMin
+		res, err := BisectScene(context.Background(), enc, spreadEvaluator{}, "in.mp4", scene, cfg, workDir, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.CRF != cfg.MinCRF || res.MetTarget {
+			t.Fatalf("min metric: result = %+v, want best-effort MinCRF unmet", res)
+		}
+	})
+}
+
 // TestBisectSceneNeverMet は下限CRFでも未達のケース。MinCRF採用・未達フラグ。
 func TestBisectSceneNeverMet(t *testing.T) {
 	enc, ev, cfg := newBisectCfg(func(int) float64 { return 50.0 }, t)

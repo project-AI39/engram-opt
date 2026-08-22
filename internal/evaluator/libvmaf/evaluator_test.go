@@ -37,7 +37,7 @@ func TestParseReport(t *testing.T) {
 	if q.Min != 8.589416 {
 		t.Fatalf("min = %v", q.Min)
 	}
-	if !q.TargetMet(19.69) || q.TargetMet(19.70) {
+	if !q.TargetMet(domain.MetricHarmonic, 19.69) || q.TargetMet(domain.MetricHarmonic, 19.70) {
 		t.Fatalf("TargetMet boundary check failed: %+v", q)
 	}
 }

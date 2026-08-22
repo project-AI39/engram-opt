@@ -99,6 +99,9 @@ type Options struct {
 	MaxCRF   int
 	BitDepth int
 
+	// Metric は合否基準指標の表示用（空はharmonic扱い）。
+	Metric string
+
 	// Audio は音声モード表示用（空なら表示しない）。
 	Audio string
 

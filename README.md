@@ -77,6 +77,7 @@ setupの内容: FFmpeg 8.1.2 full build をGitHubリリースからダウンロ�
 | `-o, --out <path>` | `<input>.opt.mkv` | 出力先。一時領域配下は起動時に拒否される。推奨コンテナは `.mkv` |
 | `--codec <name>` | `h264` | `h264` / `hevc` / `av1` |
 | `--preset <p>` | `medium` | エンコードプリセット。**全試行で一律固定** |
+| `--metric <m>` | `harmonic` | 合否基準のVMAF統計: `harmonic`（調和平均・既定）/ `mean`（算術平均）/ `min`（最悪フレーム）。`min` は最悪1帧が基準のため目標未達でMinCRF採用になりやすい |
 | `--audio <m>` | `copy` | 最終音声トラック: `copy` / `opus` / `aac` / `none`（下表） |
 | `--shot <n>` | 無効 | デバッグ: シーン番号nだけCRF探索（結合なし・勝利チャンク保持） |
 | `--tui` | 無効 | ダッシュボード表示。stdoutが端末以外なら無視され平文ログになる |
