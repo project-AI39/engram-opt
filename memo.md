@@ -454,6 +454,7 @@ Output       : [ 空=<入力>.opt.mkv                            ]
 - CLI側: ルートコマンドと optimize の Args を0または1へ緩め、`decideLaunch(引数有無, TTY, --tui, --headless)` の純関数で起動モードを決定（単体テストでマトリクス照合）。engine（Orchestrator/BisectScene）は無変更
 - サマリー表示内容: 出力先／サイズ削減率／シーン別採用CRF一覧／達成率
 - 実装上の要点: ①tea.Program生成前にModelへ `sender` 間接層（ポインタレシーバ）を埋め込み、生成後の prog.Send 差し替えに対応 ②値レシーバのUpdate内でフォーム状態を変更する箇所は「更新後のModelを返す」パターンで統一（confirmWizard等） ③Enter連打によるパイプライン二重起動は `wiz.starting` フラグで防止 ④TTY判定はstdlib完結（`os.Stdout.Stat()`+`ModeCharDevice`）を `ui.IsTerminal()` として公開
+- **ウィザード設定の永続化は意図的に未実施**（2026-08決定）: 前回値の保存・復元は「デフォルト値が常に妥当である」設計に対する利得が薄く、永続化レイヤーと既定値変更時の不整合コストが上回るため。頻繁に同じ非既定値を使う層はCLIフラグが担う。将来需要が顕在化した場合は「変更項目のみ記憶」の最小形を再検討する
 
 ## 設計強化の記録（第2次根本レビュー反映）
 
