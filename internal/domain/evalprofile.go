@@ -9,22 +9,34 @@ import (
 // EvalProfile は評価アルゴリズムと評価解像度のセット。
 // アルゴリズムごとに妥な評価解像度が異なるため、単体ではなくセットで指定する
 // （memo.md「評価プロファイル」）。スコアは同一プロファイル内でのみ比較可能。
+//
+// 拡張規約: 新しい評価アルゴリズムの追加は、このレジストリへ
+// 「Algorithm=その評価器が解釈できるID」のエントリを1行足し、対応する
+// QualityEvaluator 実装を配線するだけ。未知のAlgorithmは評価器側で
+// エラーになるため、誤った組合せは静かに動かない（フェイルファスト）。
 type EvalProfile struct {
-	Name   string // CLI/ウィザードで選ぶID
-	Model  string // libvmaf の version= 名
-	Width  int    // 評価用正規化解像度（両入力をこのサイズへ揃えて比較）
-	Height int
+	Name      string // CLI/ウィザードで選ぶID（<algorithm>-<resolution> 形式）
+	Algorithm string // 評価アルゴリズムID。対応するQualityEvaluator実装のみ受け付ける
+	Model     string // アルゴリズム内でのモデル指定（libvmafなら version= 名）
+	Width     int    // 評価用正規化解像度（両入力をこのサイズへ揃えて比較）
+	Height    int
 }
 
 // 組み込みプロファイル。モデルの実在はpin版ffmpegに対して実機確認済み
-// （memo.md「評価プロファイル」参照）。追加はこの表＋ヘルプ文言のみ。
+// （memo.md「評価プロファイル」参照）。追加はこの表＋ヘルプ文言のみで済む設計。
+// 現在はlibvmaf系のみ。将来的にXPSNR/SSIM等を追加する場合は
+// Algorithm を分けた別エントリとなる（例: {Name:"xpsnr-hd", Algorithm:"xpsnr", ...}）。
 var evalProfiles = []EvalProfile{
-	{Name: "hd1080", Model: "vmaf_v1.0.16_3d0h", Width: 1920, Height: 1080},
-	{Name: "uhd4k", Model: "vmaf_4k_v0.6.1", Width: 3840, Height: 2160},
+	{Name: "vmaf-hd1080", Algorithm: "libvmaf", Model: "vmaf_v1.0.16_3d0h", Width: 1920, Height: 1080},
+	{Name: "vmaf-uhd4k", Algorithm: "libvmaf", Model: "vmaf_4k_v0.6.1", Width: 3840, Height: 2160},
 }
 
 // DefaultEvalProfileName は未指定時に使うプロファイル。
-const DefaultEvalProfileName = "hd1080"
+const DefaultEvalProfileName = "vmaf-hd1080"
+
+// DefaultEvalAlgorithm は現在実装されている唯一の評価アルゴリズム。
+// QualityEvaluator 実装（libvmaf）はこれ以外のAlgorithmを受け付けない。
+const DefaultEvalAlgorithm = "libvmaf"
 
 // DefaultEvalProfile は既定プロファイルを返す（テスト等で明示的に渡す場合の利便用）。
 func DefaultEvalProfile() EvalProfile {

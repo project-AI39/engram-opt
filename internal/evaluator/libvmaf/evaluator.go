@@ -52,6 +52,9 @@ func (e *Evaluator) Evaluate(ctx context.Context, originalPath string, scene dom
 	if err := profile.Validate(); err != nil {
 		return domain.QualityMetrics{}, fmt.Errorf("invalid eval profile: %w", err)
 	}
+	if profile.Algorithm != "libvmaf" {
+		return domain.QualityMetrics{}, fmt.Errorf("unsupported evaluation algorithm %q (this evaluator handles libvmaf only)", profile.Algorithm)
+	}
 	if workDir == "" {
 		return domain.QualityMetrics{}, fmt.Errorf("evaluation requires a work directory")
 	}

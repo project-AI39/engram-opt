@@ -32,5 +32,5 @@
 - **音声はシーン分割の対象外**: 完成映像への最終ミックスで1回だけ処理する（`--audio copy` 既定=無劣化copy、opus/aacはチャンネル数から自動ビットレート、none=破棄）。実装は `domain.AudioMuxer`＋orchestratorのオプション依存 `Muxer`。
 - 入力が8-bitでも出力は既定 `-pix_fmt yuv420p10le`（10-bit。バンディング防止とサイズ削減のため）。Phase 8から8-bit（yuv420p）も選択可能（encoderは `EncodeParams.BitDepth` を参照）。
 - チャンク分割はシーン単位。チャンク先頭は必ずIDR（copy結合とシークの前提）。**先頭以降の適応的キーフレームはエンコーダー判断に委ねる**（scenecut抑止は廃止。配置はCRF非依存のため二分探索と両立、詳細はmemo.md「GOP / キーフレーム設定」）。
-- VMAF: **評価プロファイル制**（アルゴリズム×評価解像度のセット、`domain.EvalProfile`）。既定`hd1080`=vmaf_v1.0.16_3d0h@1920x1080、`uhd4k`=vmaf_4k_v0.6.1@3840x2160（pin版ffmpegに同梱・実機確認済み）。**フォールバックは廃止**（2026-08決定）——評価失敗は即エラーとするフェイルファスト方針。スコアは同一プロファイル内でのみ比較可能
+- VMAF: **評価プロファイル制**（アルゴリズム×評価解像度のセット、`domain.EvalProfile`）。既定`vmaf-hd1080`=3d0h@1920x1080、`vmaf-uhd4k`=4Kモデル@3840x2160（pin版ffmpegに同梱・実機確認済み）。Nameは`<algorithm>-<resolution>`形式とし、将来アルゴリズム追加時はAlgorithmフィールドを分けた新エントリで拡張。**フォールバックは廃止**（2026-08決定）——評価失敗は即エラーとするフェイルファスト方針。スコアは同一プロファイル内でのみ比較可能
 - 合否判定: シーンごとに `選択指標 >= targetScore`（既定 95.0）を満たす最大CRFを採用。指標は `--metric harmonic|mean|min`（既定harmonic、旧固定仕様と同一）で選択可。
