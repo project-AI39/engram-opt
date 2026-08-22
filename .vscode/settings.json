@@ -1,0 +1,133 @@
+{
+  "commit-message-editor.staticTemplate": [
+    "feat: Short description",
+    "",
+    "Message body",
+    "",
+    "Message footer"
+  ],
+  "commit-message-editor.dynamicTemplate": [
+    "{type}{scope}: {description}",
+    "",
+    "{body}",
+    "",
+    "{breaking_change}{footer}"
+  ],
+  "commit-message-editor.tokens": [
+    {
+      "label": "種類",
+      "name": "type",
+      "type": "enum",
+      "options": [
+        {
+          "label": "---",
+          "value": ""
+        },
+        {
+          "label": "✨ feat",
+          "value": "✨ feat",
+          "description": "新しい機能の追加"
+        },
+        {
+          "label": "🐛 fix",
+          "value": "🐛 fix",
+          "description": "バグや不具合の修正"
+        },
+        {
+          "label": "📝 docs",
+          "value": "📝 docs",
+          "description": "ドキュメントやコメントの追加・修正"
+        },
+        {
+          "label": "🎨 style",
+          "value": "🎨 style",
+          "description": "コードの書式や見た目の変更（動作に影響なし）"
+        },
+        {
+          "label": "♻️ refactor",
+          "value": "♻️ refactor",
+          "description": "機能や動作を変えずにコードを整理・改善"
+        },
+        {
+          "label": "⚡️ perf",
+          "value": "⚡️ perf",
+          "description": "処理速度や効率の改善"
+        },
+        {
+          "label": "✅ test",
+          "value": "✅ test",
+          "description": "テストコードの追加・修正"
+        },
+        {
+          "label": "👷 build",
+          "value": "👷 build",
+          "description": "ビルドツールや外部依存などビルド関連の変更"
+        },
+        {
+          "label": "💚 ci",
+          "value": "💚 ci",
+          "description": "CI（継続的インテグレーション）設定や自動化スクリプトの変更"
+        },
+        {
+          "label": "🔧 chore",
+          "value": "🔧 chore",
+          "description": "その他の雑多な変更（設定ファイルの編集など）"
+        },
+        {
+          "label": "⏪️ revert",
+          "value": "⏪️ revert",
+          "description": "過去のコミットの取り消し"
+        },
+        {
+          "label": "---",
+          "value": ""
+        },
+        {
+          "label": "🚧 wip",
+          "value": "🚧 wip",
+          "description": "作業途中や一時保存のコミット（mainには残さない）"
+        }
+      ],
+      "description": "このコミットで行った変更の種類"
+    },
+    {
+      "label": "スコープ",
+      "name": "scope",
+      "description": "変更箇所や対象を入力します（例：parser、UIなど）。省略もできます。",
+      "type": "text",
+      "multiline": false,
+      "prefix": "(",
+      "suffix": ")"
+    },
+    {
+      "label": "概要",
+      "name": "description",
+      "description": "コミット内容を短く1行で記述してください。",
+      "type": "text",
+      "multiline": false
+    },
+    {
+      "label": "詳細",
+      "name": "body",
+      "description": "必要に応じて、変更の詳細や理由を記載してください（任意）。",
+      "type": "text",
+      "multiline": true,
+      "lines": 5,
+      "maxLines": 10
+    },
+    {
+      "label": "破壊的変更",
+      "name": "breaking_change",
+      "type": "boolean",
+      "value": "BREAKING CHANGE: ",
+      "default": false
+    },
+    {
+      "label": "フッター",
+      "name": "footer",
+      "description": "関連Issue番号や補足情報などがあれば記載してください（任意）。",
+      "type": "text",
+      "multiline": true
+    }
+  ]
+}
