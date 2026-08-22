@@ -243,12 +243,19 @@ func (m Model) runningAny() bool {
 // ===== 共通ユーティリティ =====
 
 // shorten は長いパスを中略表示する。
+// 日本語パス等のマルチバイト文字をバイト境界で切断して文字化けさせないため、
+// ルーン単位で数える（truncate と同じ規約）。
 func shorten(p string, max int) string {
-	if len(p) <= max {
+	runes := []rune(p)
+	if len(runes) <= max {
 		return p
 	}
 	half := (max - 3) / 2
-	return p[:half] + "..." + p[len(p)-half:]
+	// max 極小時に half<=0 へ倒れ込むと負/零インデックス参照になるため打ち切りへフォールバック
+	if half <= 0 {
+		return truncate(p, max)
+	}
+	return string(runes[:half]) + "..." + string(runes[len(runes)-half:])
 }
 
 // truncate は行を指定幅で打ち切る。
