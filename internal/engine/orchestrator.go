@@ -165,6 +165,11 @@ func (o *Orchestrator) run(ctx context.Context, inputPath, outputPath, workDir s
 	// 原子的確定: ステージング完成後にユーザー指定パスへ置換する。
 	// 同一ディレクトリ内renameのためボリューム跨ぎは発生せず、Windowsでも
 	// 既存ファイルへの上書きが可能（os.Rename は MoveFileEx(REPLACE_EXISTING)）。
+	// 上書きは設計どおりだが無通知だと「前回の出力消失」と誤解されるため、
+	// 既存ファイルがある場合のみ明示的にログへ残す（TUI表示中もログ欄へ流れる）。
+	if _, err := os.Stat(outputPath); err == nil {
+		log.Printf("[pipeline] overwriting existing output: %s", outputPath)
+	}
 	if err := os.Rename(stagedPath, outputPath); err != nil {
 		return nil, fmt.Errorf("finalizing output: %w", err)
 	}

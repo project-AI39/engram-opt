@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -208,5 +209,39 @@ func TestOrchestratorFailedConcatLeavesNoPartialOutput(t *testing.T) {
 		if strings.Contains(e.Name(), ".part-") {
 			t.Fatalf("staged partial must be cleaned: %s", e.Name())
 		}
+	}
+}
+
+// 既存出力が存在する場合は置換前に警告ログを出す（無通知上書きの防止）。
+func TestOrchestratorWarnsWhenOverwritingOutput(t *testing.T) {
+	workDir := filepath.Join(t.TempDir(), "job")
+	output := filepath.Join(t.TempDir(), "out", "final.mkv")
+	if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(output, []byte("previous run"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	prev := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(prev)
+
+	orch := &Orchestrator{
+		Detector:  &fakeDetector{scenes: twoScenes()},
+		Encoder:   &fakeEncoder{},
+		Evaluator: &fakeEvaluator{scoreAt: func(int) float64 { return 100 }},
+	}
+	cfg := domain.SearchConfig{Codec: domain.CodecH264, MinCRF: 15, MaxCRF: 36, TargetScore: 90, Preset: "medium"}
+
+	if _, err := orch.Run(context.Background(), "in.mp4", output, workDir, cfg, ProgressCallbacks{}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !strings.Contains(buf.String(), "overwriting existing output") {
+		t.Fatalf("overwrite warning not logged:\n%s", buf.String())
+	}
+	if !strings.Contains(buf.String(), output) {
+		t.Fatalf("warning should include the target path:\n%s", buf.String())
 	}
 }
