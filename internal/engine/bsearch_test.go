@@ -249,3 +249,27 @@ func assertOnlyBestFileRemains(t *testing.T, dir, bestPath string) {
 		t.Fatalf("best chunk missing: %s", want)
 	}
 }
+
+// --out-res で指定した出力解像度は全試行のEncodeParamsへ伝播する。
+// （実機検証で「scaleが効かずソース解像度のまま出力される」回帰を捕捉したテスト）
+func TestBisectSceneAppliesOutRes(t *testing.T) {
+	enc := &fakeEncoder{}
+	ev := &fakeEvaluator{scoreAt: func(int) float64 { return 100 }}
+	cfg := domain.SearchConfig{
+		Codec: domain.CodecH264, MinCRF: 15, MaxCRF: 36, TargetScore: 90,
+		Preset: "medium", OutWidth: 1280, OutHeight: 720,
+	}
+	_, err := BisectScene(context.Background(), enc, ev, "in.mp4",
+		domain.Scene{Index: 0, StartFrame: 0, EndFrame: 9}, cfg, t.TempDir(), nil)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(enc.calls) == 0 {
+		t.Fatal("no encode calls recorded")
+	}
+	for i, p := range enc.calls {
+		if p.OutWidth != 1280 || p.OutHeight != 720 {
+			t.Fatalf("call[%d] out res = %dx%d, want 1280x720", i, p.OutWidth, p.OutHeight)
+		}
+	}
+}

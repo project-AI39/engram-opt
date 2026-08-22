@@ -67,10 +67,12 @@ func BisectScene(ctx context.Context, enc domain.VideoEncoder, ev domain.Quality
 	tryCRF := func(crf int) (domain.QualityMetrics, string, bool, error) {
 		out := filepath.Join(workDir, fmt.Sprintf("scene%04d_crf%02d.mkv", scene.Index, crf))
 		params := domain.EncodeParams{
-			Codec:    cfg.Codec,
-			CRF:      crf,
-			Preset:   cfg.Preset,
-			BitDepth: paramsBitDepth,
+			Codec:     cfg.Codec,
+			CRF:       crf,
+			Preset:    cfg.Preset,
+			BitDepth:  paramsBitDepth,
+			OutWidth:  cfg.OutWidth,
+			OutHeight: cfg.OutHeight,
 		}
 		if err := enc.EncodeChunk(ctx, inputPath, scene, params, out); err != nil {
 			_ = os.Remove(out) // 失敗試行の断片を掃除
