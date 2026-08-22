@@ -111,12 +111,7 @@ func (e *Evaluator) evaluateWithProfile(ctx context.Context, ffmpegPath, workDir
 	//   （frame duration = fpsDen/fpsNum 秒 = ちょうど fpsDen tick。任意の有理数fpsで
 	//     厳密に整数になるため誤差ゼロ。）
 	//   select 後の setpts の N は「選択通過フレーム」の連番になるため部分区間でも正しい。
-	stamp := fmt.Sprintf("settb=1/%d,setpts=%d*N", fpsNum, fpsDen)
-	refChain := fmt.Sprintf("select='between(n,%d,%d)',%s,scale=%d:%d",
-		scene.StartFrame, scene.EndFrame, stamp, profile.Width, profile.Height)
-	distChain := fmt.Sprintf("%s,scale=%d:%d", stamp, profile.Width, profile.Height)
-	graph := fmt.Sprintf("[1:v]%s[r];[0:v]%s[d];[d][r]libvmaf=log_fmt=json:log_path=%s:model='version=%s':shortest=1:eof_action=endall",
-		refChain, distChain, logFileName, profile.Model)
+	graph := buildEvalGraph(scene, profile, fpsNum, fpsDen)
 
 	cmd := exec.CommandContext(ctx, ffmpegPath,
 		"-hide_banner", "-nostdin", "-loglevel", "error",
