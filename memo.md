@@ -413,6 +413,18 @@ type QualityEvaluator interface {
 - `--headless` と `--tui` の同時指定はエラー
 - `--shot` は開発者デバッグ用のためウィザード項目にしない（フラグ専用）
 
+### ダブルクリック起動の確定実装（cobra mousetrap無効化）
+
+上表の「ダブルクリック→ウィザード」を実現するには cobra 既定機能の解除が必須:
+cobraは親プロセスが explorer.exe（＝ダブルクリック）のとき **mousetrap** 機能により
+「This is a command line tool.」を表示してコマンドを実行せず終了する。
+
+- 対策: `cobra.MousetrapHelpText = ""` を internal/cli パッケージの `init()` で設定。
+  mousetrapは explorer.exe 親のときしか発動しないため、端末起動・headless・パイプへの影響はゼロ
+- 保険として、TUI開始前の致命的エラー（bin/不在等）でも窓が瞬時に閉じないよう、
+  **裸起動＋TTY のときのみ** main.go 側で `[Enter]キーで終了します...` 待ちを入れる
+  （`cli.ShouldPauseAfterError()`。引数あり／headless／パイプは従来どおり即終了）
+
 ### ウィザード項目（Phase 8改訂・実値選択）
 
 ```
