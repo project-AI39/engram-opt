@@ -33,7 +33,7 @@ func New() *Encoder { return &Encoder{} }
 func (e *Encoder) Name() string { return "ffmpeg" }
 
 // EncodeChunk 元動画の特定シーン区間を指定パラメータでエンコードし outputPath へ出力する。
-// 出力は常に10-bit（yuv420p10le）固定。
+// 出力ピクセルフォーマットは params.BitDepth 由来（既定10-bit yuv420p10le、8-bitならyuv420p）。
 func (e *Encoder) EncodeChunk(ctx context.Context, inputPath string, scene domain.Scene, params domain.EncodeParams, outputPath string) error {
 	if !toolbin.FileExists(inputPath) {
 		return fmt.Errorf("input file not found: %s", inputPath)
@@ -48,6 +48,10 @@ func (e *Encoder) EncodeChunk(ctx context.Context, inputPath string, scene domai
 
 	gop := strconv.FormatInt(scene.FrameCount(), 10)
 	crf := strconv.Itoa(params.CRF)
+	pixFmt, err := pixFmtFor(params.BitDepth)
+	if err != nil {
+		return err
+	}
 
 	// 共通引数: シーン区間のみを選択（整数フレーム番号）し、タイムスタンプを0起点へ正規化
 	args := []string{
@@ -55,7 +59,7 @@ func (e *Encoder) EncodeChunk(ctx context.Context, inputPath string, scene domai
 		"-i", inputPath,
 		"-vf", fmt.Sprintf("select='between(n,%d,%d)',setpts=PTS-STARTPTS", scene.StartFrame, scene.EndFrame),
 		"-frames:v", gop,
-		"-pix_fmt", "yuv420p10le",
+		"-pix_fmt", pixFmt,
 		"-g", gop,
 	}
 
@@ -126,6 +130,18 @@ func (e *Encoder) ConcatChunks(ctx context.Context, chunkPaths []string, finalOu
 		return fmt.Errorf("concat failed: %w\n%s", err, tail(string(out), 20))
 	}
 	return nil
+}
+
+// pixFmtFor はビット深度をffmpegのpix_fmtへ対応させる（memo.md「パラメータ一覧」A-6）。
+func pixFmtFor(bitDepth int) (string, error) {
+	switch bitDepth {
+	case 10:
+		return "yuv420p10le", nil
+	case 8:
+		return "yuv420p", nil
+	default:
+		return "", fmt.Errorf("unsupported bit depth %d (use 8 or 10)", bitDepth)
+	}
 }
 
 // svtPreset は x264/x265 流儀の preset 名を SVT-AV1 の数値プリセットへ変換する。

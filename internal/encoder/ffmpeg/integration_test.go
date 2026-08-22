@@ -45,6 +45,26 @@ func TestEncodeChunkIntegration(t *testing.T) {
 	}
 }
 
+// Bit Depth露出（memo.md「パラメータ一覧」A-6）: 8指定時は yuv420p で出力されること。
+// 既定(10)の yuv420p10le は TestEncodeChunkIntegration が担保済み。
+func TestEncodeChunkBitDepth8Integration(t *testing.T) {
+	testutil.RequireBinaries(t, "ffmpeg", "ffprobe")
+	ctx := context.Background()
+
+	video := testutil.GenerateSampleVideo(t, t.TempDir())
+	scene := domain.Scene{Index: 0, StartFrame: 0, EndFrame: 59}
+	out := filepath.Join(t.TempDir(), "chunk8.mkv")
+
+	err := New().EncodeChunk(ctx, video, scene,
+		domain.EncodeParams{Codec: domain.CodecH264, CRF: 18, Preset: "medium", BitDepth: 8}, out)
+	if err != nil {
+		t.Fatalf("EncodeChunk(8bit) failed: %v", err)
+	}
+	if info := testutil.ProbeStreamInfo(t, ctx, out); info.PixFmt != "yuv420p" || info.Frames != 60 {
+		t.Fatalf("pix_fmt/frames = %s/%d, want yuv420p/60", info.PixFmt, info.Frames)
+	}
+}
+
 // チャンク内容が指定区間と正しく対応していることの間接証明。
 // 区間がずれていれば時間基準正規化後も別フレーム同士が比較され、
 // VMAFスコアが崩壊する（Phase 3実測）。crf18のほぼ透明な再エンコードなら

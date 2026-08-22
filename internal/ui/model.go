@@ -93,7 +93,15 @@ type Options struct {
 	Codec      domain.VideoCodec
 	Preset     string
 	Target     float64
-	Audio      string // 音声モード表示用（空なら表示しない）
+
+	// MinCRF / MaxCRF / BitDepth はウィザード初期値（memo.md「パラメータ一覧」A-3〜6）。
+	// ゼロ値は「未指定」扱いでドメイン既定へフォールバックする。
+	MinCRF   int
+	MaxCRF   int
+	BitDepth int
+
+	// Audio は音声モード表示用（空なら表示しない）。
+	Audio string
 
 	// LogMirror はTUI表示中も log 出力を複製する書き込み先（--log-file 用）。
 	// nil許容。stderr への迂回は画面破壊になるため、呼び出し側がファイル等を渡す。

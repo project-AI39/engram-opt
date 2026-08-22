@@ -17,10 +17,10 @@ type fakeMuxer struct {
 }
 
 type muxCall struct {
-	videoPath   string
+	videoPath    string
 	originalPath string
-	mode        domain.AudioMode
-	outputPath  string
+	mode         domain.AudioMode
+	outputPath   string
 }
 
 func (f *fakeMuxer) MuxAudio(_ context.Context, videoPath, originalPath string, mode domain.AudioMode, outputPath string) error {

@@ -26,9 +26,9 @@
 
 ## エンコード仕様の固定点（変更前に memo.md 再確認）
 
-- 探索パラメータは**整数CRFのみ**（範囲 15〜36、単調性前提の二分探索）。Preset/Speed は全試行で一律固定。
+- 探索パラメータは**整数CRFのみ**（既定 15〜36、単調性前提の二分探索。Phase 8からウィザードで変更可、検証は `SearchConfig.Validate()` に一元）。Preset/Speed は全試行で一律固定。
 - **音声はシーン分割の対象外**: 完成映像への最終ミックスで1回だけ処理する（`--audio copy` 既定=無劣化copy、opus/aacはチャンネル数から自動ビットレート、none=破棄）。実装は `domain.AudioMuxer`＋orchestratorのオプション依存 `Muxer`。
-- 入力が8-bitでも出力は `-pix_fmt yuv420p10le`（10-bit固定。バンディング防止とサイズ削減のため）。
+- 入力が8-bitでも出力は既定 `-pix_fmt yuv420p10le`（10-bit。バンディング防止とサイズ削減のため）。Phase 8から8-bit（yuv420p）も選択可能（encoderは `EncodeParams.BitDepth` を参照）。
 - チャンク分割はシーン単位。IDRキーフレームは各チャンク先頭のみ。
 - VMAF: FFmpeg内蔵 `vmaf_v1.0.16_3d0h.json` を使用（外部モデルファイル管理不要）。フォールバックは `vmaf_v0.6.1neg`。
 - 合否判定: シーンごとの `harmonic_mean >= targetScore`（既定 95.0）を満たす最大CRFを採用。`mean` や `min` は使わない。

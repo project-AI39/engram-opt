@@ -50,6 +50,8 @@ func BisectScene(ctx context.Context, enc domain.VideoEncoder, ev domain.Quality
 	if cfg.MinCRF > cfg.MaxCRF {
 		return nil, fmt.Errorf("invalid CRF range: min=%d max=%d", cfg.MinCRF, cfg.MaxCRF)
 	}
+	// 出力ビット深度の正規化（0は「未指定」＝既定10）。旧テストのリテラル互換のため。
+	paramsBitDepth := cfg.EffectiveBitDepth()
 	if err := scene.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid scene: %w", err)
 	}
@@ -66,7 +68,7 @@ func BisectScene(ctx context.Context, enc domain.VideoEncoder, ev domain.Quality
 			Codec:    cfg.Codec,
 			CRF:      crf,
 			Preset:   cfg.Preset,
-			BitDepth: 10,
+			BitDepth: paramsBitDepth,
 		}
 		if err := enc.EncodeChunk(ctx, inputPath, scene, params, out); err != nil {
 			_ = os.Remove(out) // 失敗試行の断片を掃除

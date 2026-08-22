@@ -35,6 +35,9 @@ func launchWizardMode(ctx context.Context, input, output string, cfg domain.Sear
 		Codec:      cfg.Codec,
 		Preset:     cfg.Preset,
 		Target:     cfg.TargetScore,
+		MinCRF:     cfg.MinCRF,
+		MaxCRF:     cfg.MaxCRF,
+		BitDepth:   cfg.BitDepth,
 		Audio:      string(audio),
 		LogMirror:  logSink,
 	}

@@ -135,6 +135,47 @@ ffprobe の `channels` で判定し、数値指定は不要:
 - opus+MP4コンテナ: ffmpeg 8.1.2では警告なく動作を実測済み。ただし推奨コンテナは.mkvのまま
 - copyモードで元コーデックが出力コンテナ非対応の場合（例: 一部コーデックのmp4出力）、ffmpegがエラーで即座に失敗する（fail-through）
 
+# パラメータ一覧と露出方針（Phase 8）
+
+外部意見「抽象ラベル（高速/高圧縮等）はかえって分かりにくい。最低限の知識がある人向けに内部パラメータをそのまま選択させたい」を受けて全パラメータを棚卸しした。
+方針: **内部で実際に使われている名前と値をそのまま選択肢として出し、全項目に最適な既定値を事前入力する**。触らなければ従来の固定仕様と同一の挙動。
+
+### A. ウィザードへ露出するチューナブル（今回実装）
+
+| # | 表示名 | 内部実体 | 既定 | 選択肢・範囲 |
+|---|---|---|---|---|
+| 1 | Codec | SearchConfig.Codec | h264 | h264 / hevc / av1 |
+| 2 | Preset | EncodeParams.Preset | medium | **実値リスト**: h264/hevc = x264流9段階（ultrafast / superfast / veryfast / faster / fast / medium / slow / slower / veryslow）。av1 = 数値文字列 "1"〜"13"（svtPresetの数値透過経路）。コーデック切替時は当該既定（medium / "6"）へ自動リセット |
+| 3 | Min CRF | SearchConfig.MinCRF（旧: DefaultMinCRF=15 定数のみで露出なし） | 15 | 整数 0〜63 |
+| 4 | Max CRF | SearchConfig.MaxCRF（旧: DefaultMaxCRF=36 定数のみ） | 36 | 整数 0〜63 かつ Min<=Max。※x264/x265は51超でffmpegが失敗するため実質上限は51、av1用ヘッドルームとして63まで許容 |
+| 5 | Target VMAF | SearchConfig.TargetScore（旧: DefaultTargetScore=95.0 定数のみ） | 95.0 | harmonic_mean基準の実数。0 < t <= 100（ウィザード入力は50〜100に制限）。Phase 7で「保留」とした --vmaf 相当を本方針で解消 |
+| 6 | Bit Depth | SearchConfig.BitDepth → EncodeParams.BitDepth（旧: encoder.go が yuv420p10le をハードコードし BitDepth 未参照だった） | 10 | 8 (=yuv420p) / 10 (=yuv420p10le)。encoder を params 参照に修正 |
+
+- 検証は `domain.SearchConfig.Validate()` に一元化し、ウィザード確定時とCLI構築時の双方で呼ぶ。BitDepth==0 は「未指定＝既定10」扱いとし、既存テストのSearchConfigリテラルを壊さない。
+
+### B. 既に露出済み（変更なし）
+
+入力ファイル／音声モード（copy/opus/aac/none）／出力先（空=<入力>.opt.mkv、ensureOutside検証込み）。
+
+### C. 意図的に露出しない（構造的固定点）
+
+| 項目 | 露出しない理由 |
+|---|---|
+| GOP長＝シーン長＋sc_threshold=0（IDR先頭のみ） | チャンク分割と無劣化結合の前提。緩めると境界品質・結合整合が崩壊 |
+| select整数フレーム抽出（-ss禁止） | フレーム完全一致の根幹（浮動小数点秒は評価崩壊の実測あり） |
+| settb/setpts時間基準正規化＋shortest=eof_action=endall | VMAFペアリング正確性の根幹（実測済み） |
+| 評価時1920x1080強制スケール | vmaf_v1.0.16_3d0h のCAMBI特徴量の要求（低解像度で失敗） |
+| VMAFモデル対（3d0h主力＋0.6.1neg自動フォールバック） | 信頼性機構であり選好パラメータではない |
+| シーン逐次処理 | 固定方針 |
+| 音声自動ビットレート表（ch<6→128k、>=6→opus 256k/aac 320k） | opus/aac選択時の内部詳細。上書きは将来課題 |
+| av-scenechange検出閾値 | 現状デフォルト呼び出し。SceneDetectorインターフェース拡張が必要 → 将来課題 |
+| --shot N | 開発デバッグ専用フラグ（ウィザード対象外の決定を維持） |
+
+### D. 将来課題
+
+- CLIフラグ化（`--min-crf` / `--max-crf` / `--target` / `--bit-depth`）: headless運用での同値指定。今回スコープはTUIのみ
+- av-scenechange閾値・音声ビットレート上書きの露出
+
 # 二分探索
 
 ### 変更
@@ -338,7 +379,7 @@ type QualityEvaluator interface {
 | D&D直接起動＝プリセット済み設定画面 | D&D直接起動は**即実行**扱い。初心者の正規フローは「ダブルクリック→ウィザード（入力欄へD&Dペースト可）」へ誘導 | D&Dとターミナル引数起動は引数だけでは区別不能。親プロセス判定等は脆弱なので採らない（KISS） |
 | 並列ワーカー数の設定・Worker表示 | **削除** | シーン逐次処理は固定方針（「エンジン設計」参照）。並列化は明示的にスコープ外 |
 | 目標VMAFの編集（`--vmaf`） | **保留**（別途決定） | 探索パラメータ固定仕様（CRF 15〜36・目標95.0）に関わる変更のため、本計画には含めない |
-| プリセット3段階ラベル（最高画質/バランス/極限圧縮） | 圧縮効率vs速度の3段階として採用: `slow` / `medium`(既定) / `fast` をcycle選択 | SVT-AV1の数値との差異は既存のsvtPreset解決層が吸収する |
+| プリセット3段階ラベル（最高画質/バランス/極限圧縮） | ~~採用~~ → **Phase 8で廃止**。抽象ラベルより実値選択が適切という外部意見を受け、「パラメータ一覧と露出方針（Phase 8）」節の実値リスト選択へ置換 | SVT-AV1の数値との差異は既存のsvtPreset解決層が吸収する |
 | mattn/go-isatty によるTTY判定 | **不採用**。既存の stdlib 判定（`os.Stdout.Stat()` + `ModeCharDevice`、ui.ErrNoTTY）を流用 | 依存追加の必要がない |
 | ファイル選択ダイアログ | v1は**パス入力フィールド**（存在検証付き） | bubblesに標準ファイルピッカーが無い。Windows Terminal等は入力欄へのD&Dでパスが貼り付くため実用上カバーされる。本格的なピッカーは将来拡張 |
 
@@ -355,17 +396,21 @@ type QualityEvaluator interface {
 - `--headless` と `--tui` の同時指定はエラー
 - `--shot` は開発者デバッグ用のためウィザード項目にしない（フラグ専用）
 
-### ウィザード項目（v1・既存フラグと同じ範囲のみ）
+### ウィザード項目（Phase 8改訂・実値選択）
 
 ```
 入力ファイル : [ パス入力（存在検証。D&Dペースト可）        ]
-コーデック   : < h264 >            （h264 → hevc → av1 をcycle）
-プリセット   : < バランス >        （高圧縮(slow) → バランス(medium) → 高速(fast)）
-音声         : < copy >            （copy → opus → aac → none）
-出力先       : [ 空=既定(<入力>.opt.mkv)                            ]
+Codec        : < h264 >      （h264 → hevc → av1 をcycle）
+Preset       : < medium >    （実値: ultrafast..veryslow 9段階／av1時は "1".."13"）
+Min CRF      : [ 15 ]
+Max CRF      : [ 36 ]
+Target VMAF  : [ 95.0 ]      （harmonic_mean >= この値 の最大CRFを採用）
+Bit Depth    : < 10 >        （10 = yuv420p10le / 8 = yuv420p）
+Audio        : < copy >      （copy → opus → aac → none）
+Output       : [ 空=<入力>.opt.mkv                            ]
 
-  [Enter: 最適化開始]   [q: 終了]
-※ 探索仕様（CRF 15〜36 / VMAF目標95.0）は固定。画面下部に明記する。
+  [Enter] 最適化開始   [Esc/Ctrl+C] 終了
+※ 全項目に最適な既定値を事前入力。触らなければ従来の固定仕様と同一の挙動
 ```
 
 ### 実装メモ

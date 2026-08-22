@@ -252,6 +252,7 @@ func buildSearchConfig(codecName, preset string) (domain.SearchConfig, error) {
 		MaxCRF:      domain.DefaultMaxCRF,
 		TargetScore: domain.DefaultTargetScore,
 		Preset:      preset,
+		BitDepth:    domain.DefaultBitDepth,
 	}, nil
 }
 

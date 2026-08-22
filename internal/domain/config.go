@@ -1,6 +1,9 @@
 package domain
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // VideoCodec 対応コーデック種別。
 type VideoCodec string
@@ -16,7 +19,7 @@ type EncodeParams struct {
 	Codec    VideoCodec
 	CRF      int    // 試行するCRF値（整数のみ。範囲はSearchConfigで制御）
 	Preset   string // 全試行で一律固定。codec別の実際の引数解決はencoder/ffmpeg内部で行う
-	BitDepth int    // 10固定（yuv420p10le）
+	BitDepth int    // 出力ビット深度: 10(yuv420p10le) / 8(yuv420p)。既定はSearchConfig.BitDepth
 }
 
 // SearchConfig CRF二分探索の全体設定。
@@ -26,14 +29,56 @@ type SearchConfig struct {
 	MaxCRF      int     // 探索上限（既定36）
 	TargetScore float64 // 合否目標スコア（既定95.0、harmonic_mean基準）
 	Preset      string  // 探索中の全試行で一律固定するpreset
+	BitDepth    int     // 出力ビット深度（既定10。0は「未指定」扱いでDefaultBitDepthへ正規化される）
 }
 
-// 探索パラメータの既定値（memo.md の固定仕様）。
+// 探索パラメータの既定値（memo.md「パラメータ一覧と露出方針」）。
+// Phase 8からウィザード経由で変更可能になったため「既定値」扱い。
 const (
 	DefaultMinCRF      = 15
 	DefaultMaxCRF      = 36
 	DefaultTargetScore = 95.0
+	DefaultBitDepth    = 10
 )
+
+// Validate はSearchConfigの整合性を検証する（ウィザード確定時とCLI構築時の共通検証）。
+func (c SearchConfig) Validate() error {
+	switch c.Codec {
+	case CodecAV1, CodecHEVC, CodecH264:
+	default:
+		return fmt.Errorf("unsupported codec %q", c.Codec)
+	}
+	if c.MinCRF < 0 || c.MinCRF > 63 {
+		return fmt.Errorf("min CRF %d out of range [0,63]", c.MinCRF)
+	}
+	if c.MaxCRF < 0 || c.MaxCRF > 63 {
+		return fmt.Errorf("max CRF %d out of range [0,63]", c.MaxCRF)
+	}
+	if c.MinCRF > c.MaxCRF {
+		return fmt.Errorf("min CRF %d must be <= max CRF %d", c.MinCRF, c.MaxCRF)
+	}
+	if c.TargetScore <= 0 || c.TargetScore > 100 {
+		return fmt.Errorf("target score %.2f out of range (0,100]", c.TargetScore)
+	}
+	if strings.TrimSpace(c.Preset) == "" {
+		return fmt.Errorf("preset is empty")
+	}
+	switch c.BitDepth {
+	case 0, DefaultBitDepth, 8:
+		// 0は未指定扱い（既定10へ正規化）。それ以外の値は不可
+	default:
+		return fmt.Errorf("unsupported bit depth %d (use 8 or 10)", c.BitDepth)
+	}
+	return nil
+}
+
+// EffectiveBitDepth は正規化後の出力ビット深度を返す（0→DefaultBitDepth）。
+func (c SearchConfig) EffectiveBitDepth() int {
+	if c.BitDepth == 0 {
+		return DefaultBitDepth
+	}
+	return c.BitDepth
+}
 
 // AudioMode 最終出力への音声の扱い（memo.md「音声処理」）。
 // 音声はシーン分割の対象外であり、完成映像への最終ミックス時に1回だけ適用される。
