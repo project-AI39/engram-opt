@@ -127,11 +127,19 @@ func newWizardForm(opts Options) wizardForm {
 	in.Prompt = ""
 	in.CharLimit = 260
 	in.Focus()
+	if opts.InputPath != "" {
+		// フラグ由来の入力初期値を尊重する（現行の起動モード判定では通常空）
+		in.SetValue(opts.InputPath)
+	}
 
 	out := textinput.New()
 	out.Placeholder = "空欄= <入力名>.opt.mkv"
 	out.Prompt = ""
 	out.CharLimit = 260
+	if opts.OutputPath != "" {
+		// --out フラグ値を出力欄の初期値へ（memo.md「フラグ値はウィザード初期値に反映」）
+		out.SetValue(opts.OutputPath)
+	}
 
 	// テキスト入力の見た目（値=明色 / プレースホルダ=薄色）
 	for _, t := range []*textinput.Model{&in, &out} {
@@ -421,7 +429,9 @@ func (m Model) confirmWizard() (Model, tea.Cmd) {
 		return m, nil
 	}
 	// D&Dや「パスのコピー」では空白入りパスが二重引用符付きで張り付くため剥いてから扱う
+	// （入力・出力の両欄を同様に正規化する）
 	in := strings.Trim(strings.TrimSpace(m.wiz.input.Value()), `"`)
+	out := strings.Trim(strings.TrimSpace(m.wiz.output.Value()), `"`)
 	switch {
 	case in == "":
 		m.wiz.formErr = "入力ファイルを指定してください"
@@ -440,7 +450,7 @@ func (m Model) confirmWizard() (Model, tea.Cmd) {
 	audio := audioChoices[m.wiz.audioIdx]
 
 	return m, func() tea.Msg {
-		prep, err := m.factory(in, strings.TrimSpace(m.wiz.output.Value()), cfg, audio)
+		prep, err := m.factory(in, out, cfg, audio)
 		if err != nil {
 			return setupErrorMsg{err}
 		}

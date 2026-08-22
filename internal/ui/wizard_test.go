@@ -381,6 +381,30 @@ func TestWizardFactoryErrorIsInlineAndRecoverable(t *testing.T) {
 	}
 }
 
+// Options（CLIフラグ由来）の入出力パスは textinput の初期値として反映される。
+// 裸起動＋--out 等のフラグ併用時に、値が黙って捨てられないことを保証する。
+func TestWizardFormSeedsPathsFromOptions(t *testing.T) {
+	w := newWizardForm(Options{
+		InputPath:  `C:\Videos\in.mp4`,
+		OutputPath: `D:\Out\res.opt.mkv`,
+		Codec:      domain.CodecH264,
+		Preset:     "medium",
+		Audio:      string(domain.AudioCopy),
+	})
+	if got := w.input.Value(); got != `C:\Videos\in.mp4` {
+		t.Fatalf("input seed = %q, want flag value", got)
+	}
+	if got := w.output.Value(); got != `D:\Out\res.opt.mkv` {
+		t.Fatalf("output seed = %q, want flag value", got)
+	}
+
+	// 空指定時はプレースホルダ表示のまま（値が入らない）
+	w2 := newWizardForm(Options{Codec: domain.CodecH264, Preset: "medium", Audio: string(domain.AudioCopy)})
+	if w2.input.Value() != "" || w2.output.Value() != "" {
+		t.Fatalf("empty options must not seed paths: %q / %q", w2.input.Value(), w2.output.Value())
+	}
+}
+
 // setup画面の描画が壊れず、全パラメータがラベル付きで見えること。
 func TestSetupViewRendersAllParameters(t *testing.T) {
 	out := testWizardModel(t).View()
