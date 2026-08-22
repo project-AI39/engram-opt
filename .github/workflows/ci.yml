@@ -1,0 +1,55 @@
+# engram-opt Dev-CI Parity ワークフロー（memo.md「Dev-CI Parity」）。
+# ローカル開発と同一のコマンド列（engram-setup → 品質ゲート → フルテスト）を
+# windows-latest 上で実行する。製品ターゲットは windows/amd64 をpinしているため、
+# ジョブもWindowsランナー単独とする（Linux/macOS向けのクロス検証はスコープ外）。
+#
+# race検出は cgo(gcc) が必要なためローカルWindowsでは実施できない。
+# ランナーにはMinGW gccが同梱されているため、ここでのみ -race を走らせる。
+
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # engram-setup の導入物（FFmpeg静的ビルド・cargoビルドのav-scenechange）を
+      # キャッシュする。pinバージョンは internal/setup 配下の定数に集約されているため、
+      # その内容ハッシュをキャッシュキーに使う（バージョン更新で自動的に無効化される）。
+      # キャッシュ命中時、engram-setupは冪等に「検証のみ」へ寄る。
+      - name: Cache bundled tools
+        uses: actions/cache@v4
+        with:
+          path: build/bin
+          key: bundled-tools-${{ runner.os }}-${{ hashFiles('internal/setup/*.go') }}
+
+      - name: Install bundled tools
+        run: go run ./cmd/engram-setup
+
+      # 品質ゲート（gofmt -l + go vet ./...）。Zip化前と同じ門番（internal/devcheck）
+      - name: Quality gates
+        run: go run ./cmd/engram-setup check
+
+      - name: Full test suite
+        run: go test ./internal/... ./test/...
+
+      # ローカルでは実行不可だったrace検出（AGENTS.md「次ステップ候補」）。
+      # 高速ループ(-short)のみ対象。フル統合テストは上のステップで走るため二重にならない
+      - name: Race detector
+        env:
+          CGO_ENABLED: '1'
+        run: go test -race -short ./internal/...
