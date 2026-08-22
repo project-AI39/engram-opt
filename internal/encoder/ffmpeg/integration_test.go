@@ -4,15 +4,39 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"engram-opt/internal/domain"
 	"engram-opt/internal/evaluator/libvmaf"
 	"engram-opt/internal/testutil"
+	"engram-opt/internal/toolbin"
 )
 
 // 実バイナリ統合テスト: FFmpegチャンク切り出しの仕様遵守を検証する。
+// makeHardCutVideo は純色ハードカット（赤→青）を含む連続ストリームを lavfi で生成する。
+func makeHardCutVideo(t testing.TB, dir string) string {
+	t.Helper()
+	ffmpegPath, err := toolbin.Resolve("ffmpeg")
+	if err != nil {
+		t.Skipf("ffmpeg unavailable (%v)", err)
+	}
+	out := filepath.Join(dir, "hardcut.mp4")
+	filter := "color=c=red:size=320x240:rate=30:duration=2[a];" +
+		"color=c=blue:size=320x240:rate=30:duration=2[b];" +
+		"[a][b]concat=n=2:v=1:a=0[out]"
+	cmd := exec.Command(ffmpegPath,
+		"-hide_banner", "-nostdin", "-loglevel", "error", "-y",
+		"-filter_complex", filter, "-map", "[out]",
+		"-pix_fmt", "yuv420p", "-c:v", "libx264", "-crf", "18",
+		out)
+	if b, cerr := cmd.CombinedOutput(); cerr != nil {
+		t.Fatalf("generating hard-cut video failed: %v\n%s", cerr, b)
+	}
+	return out
+}
+
 func TestEncodeChunkIntegration(t *testing.T) {
 	testutil.RequireBinaries(t, "ffmpeg", "ffprobe")
 	ctx := context.Background()
@@ -39,9 +63,51 @@ func TestEncodeChunkIntegration(t *testing.T) {
 	if info.FrameRate != "30/1" {
 		t.Fatalf("frame_rate = %q, want 30/1", info.FrameRate)
 	}
-	// IDRキーフレーム先頭のみ仕様: GOP=シーン長 + sc_threshold無効化により中間IDRは発生しない
-	if kf := testutil.CountKeyFrames(t, ctx, out); kf != 1 {
-		t.Fatalf("keyframe count = %d, want exactly 1 (chunk head IDR only)", kf)
+	// キーフレーム方針: 先頭フレームは必ずIDR（copy結合・シークの前提）。
+	// 以降の適応的キーフレームはエンコーダー判断に委ねるため、総数は1以上なら許容。
+	if !testutil.FirstFrameIsKey(t, ctx, out) {
+		t.Fatal("chunk must start with a keyframe (IDR)")
+	}
+}
+
+// 適応的キーフレーム方針（エンコーダー任せ）: シーン内ハードカットで
+// 追加キーフレームが実際に入ること（抑止していないことの実機検証）。
+// ソースをコーデック別に変える理由: scenecut発火はエンコーダー判断のため。
+// h264はtestsrc2→smptebars遷移でも発火するが、x265は同じ遷移をカットと
+// 判定しない実測があるため、hevcには確実に発火する純色ハードカットを使う。
+// SVT-AV1(scd)は小さいフィクスチャでは発火しない実測のため対象外。
+func TestEncodeChunkAdaptiveKeyframesIntegration(t *testing.T) {
+	testutil.RequireBinaries(t, "ffmpeg", "ffprobe")
+	ctx := context.Background()
+
+	// 共通フィクスチャ（60/120フレーム目にハードカット）。h264用。
+	sample := testutil.GenerateSampleVideo(t, t.TempDir())
+	// 強信号ソース（60フレーム目に赤→青の純色ハードカット）。hevc用。
+	hardCut := makeHardCutVideo(t, t.TempDir())
+	// どちらも 30..89 を切り出すとローカル30番目にカットが来る
+	scene := domain.Scene{Index: 0, StartFrame: 30, EndFrame: 89}
+
+	for _, tc := range []struct {
+		codec domain.VideoCodec
+		video string
+	}{
+		{domain.CodecH264, sample},
+		{domain.CodecHEVC, hardCut},
+	} {
+		t.Run(string(tc.codec), func(t *testing.T) {
+			out := filepath.Join(t.TempDir(), "chunk.mkv")
+			err := New().EncodeChunk(ctx, tc.video, scene,
+				domain.EncodeParams{Codec: tc.codec, CRF: 18, Preset: "medium", BitDepth: 10}, out)
+			if err != nil {
+				t.Fatalf("EncodeChunk failed: %v", err)
+			}
+			if !testutil.FirstFrameIsKey(t, ctx, out) {
+				t.Fatal("chunk must start with a keyframe")
+			}
+			if kf := testutil.CountKeyFrames(t, ctx, out); kf < 2 {
+				t.Fatalf("keyframe count = %d, want >=2 (adaptive insertion at intra-scene cut)", kf)
+			}
+		})
 	}
 }
 
@@ -82,7 +148,7 @@ func TestEncodeChunkRangeCorrectnessViaVMAF(t *testing.T) {
 		t.Fatalf("EncodeChunk failed: %v", err)
 	}
 
-	m, err := libvmaf.New().Evaluate(ctx, video, scene, chunk)
+	m, err := libvmaf.New().Evaluate(ctx, video, scene, chunk, t.TempDir())
 	if err != nil {
 		t.Fatalf("Evaluate failed: %v", err)
 	}

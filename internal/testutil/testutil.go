@@ -103,7 +103,7 @@ func ProbeStreamInfo(t testing.TB, ctx context.Context, videoPath string) Stream
 }
 
 // CountKeyFrames は動画内のキーフレーム総数を数える。
-// 「IDRキーフレームは各チャンク先頭のみ」という固定仕様の検証に使う。
+// キーフレーム方針（先頭IDR必須＋以降はエンコーダー適応）の検証に使う。
 func CountKeyFrames(t testing.TB, ctx context.Context, videoPath string) int {
 	t.Helper()
 	ffprobePath, err := toolbin.Resolve("ffprobe")
@@ -126,6 +126,26 @@ func CountKeyFrames(t testing.TB, ctx context.Context, videoPath string) int {
 		}
 	}
 	return count
+}
+
+// FirstFrameIsKey は動画の最初の映像フレームがキーフレームかどうかを返す。
+// 「チャンク先頭IDR必須」（ストリームコピー結合とシークの前提）の検証に使う。
+func FirstFrameIsKey(t testing.TB, ctx context.Context, videoPath string) bool {
+	t.Helper()
+	ffprobePath, err := toolbin.Resolve("ffprobe")
+	if err != nil {
+		t.Skipf("ffprobe unavailable (%v)", err)
+	}
+	out, err := exec.CommandContext(ctx, ffprobePath,
+		"-v", "error", "-select_streams", "v:0",
+		"-show_entries", "frame=key_frame",
+		"-of", "csv=p=0",
+		"-read_intervals", "%+#1", videoPath).Output()
+	if err != nil {
+		t.Fatalf("ffprobe (first keyframe) failed: %v", err)
+	}
+	v := strings.Trim(strings.TrimSpace(string(out)), ",")
+	return v == "1"
 }
 
 // HasFFmpegEncoder は同梱ffmpegが指定エンコーダを持つかどうかを実測で返す。

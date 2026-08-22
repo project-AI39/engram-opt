@@ -6,8 +6,8 @@
 //   - select は先頭からデコードするため後方シーンほど前処理コストがかかるが、
 //     正確性を優先する。高速化は必要になってから検討する。
 //
-// IDRキーフレーム: GOP長をシーン長と等しく設定し、中間IDRを抑制する
-// （チャンク先頭のみIDRという固定仕様）。
+// キーフレーム方針: チャンク先頭は必ずIDR（ストリームコピー結合の前提）。
+// 以降の適応的キーフレーム挿入はエンコーダー判断に委ねる（圧縮効率・品質優先）。
 package ffmpeg
 
 import (
@@ -54,6 +54,11 @@ func (e *Encoder) EncodeChunk(ctx context.Context, inputPath string, scene domai
 	}
 
 	// 共通引数: シーン区間のみを選択（整数フレーム番号）し、タイムスタンプを0起点へ正規化
+	//
+	// -g（GOP長上限=シーン長）の役割:
+	//   - 先頭フレームは常にIDRになる（全エンコーダ共通の保証）
+	//   - GOP長の上限をシーン長に固定することで、長尺静止シーンでも周期IDRが
+	//     チャンク内に侵入しない（周期IDRは必ずチャンク終端以降に落ちる）
 	args := []string{
 		"-hide_banner", "-nostdin", "-loglevel", "error", "-y",
 		"-i", inputPath,
@@ -65,16 +70,20 @@ func (e *Encoder) EncodeChunk(ctx context.Context, inputPath string, scene domai
 
 	switch params.Codec {
 	case domain.CodecH264:
-		args = append(args, "-c:v", "libx264", "-preset", params.Preset, "-crf", crf,
-			"-sc_threshold", "0") // シーンカット自動キーフレームを無効化（先頭IDRのみを保証）
+		// 適応的キーフレームはエンコーダー既定（scenecut=40）に委ねる。
+		// 誤爆被害は x264 既定の min-keyint（自動 ≈ keyint/10）が下限間隔として抑える。
+		args = append(args, "-c:v", "libx264", "-preset", params.Preset, "-crf", crf)
 	case domain.CodecHEVC:
-		args = append(args, "-c:v", "libx265", "-preset", params.Preset, "-crf", crf,
-			"-sc_threshold", "0")
+		// 注意: -sc_threshold は libx264 専用のAVOptionで libx265 には無効（黙って無視される）。
+		// x265の適応キーフレームも既定（scenecut=40 + 自動min-keyint）に委ねるため指定なし。
+		args = append(args, "-c:v", "libx265", "-preset", params.Preset, "-crf", crf)
 	case domain.CodecAV1:
 		sp, perr := svtPreset(params.Preset)
 		if perr != nil {
 			return perr
 		}
+		// SVT-AV1も同方針（scd既定ON）。実測では小さいフィクスチャのハードカットで
+		// 追加キーフレームは入っていないが、入っても仕様上問題ない（結合・評価は成立）。
 		args = append(args, "-c:v", "libsvtav1", "-preset", sp, "-crf", crf)
 	default:
 		return fmt.Errorf("unsupported codec: %q", params.Codec)
@@ -84,7 +93,7 @@ func (e *Encoder) EncodeChunk(ctx context.Context, inputPath string, scene domai
 	cmd := exec.CommandContext(ctx, ffmpegPath, args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("encode failed (codec=%s crf=%d): %w\n%s",
-			params.Codec, params.CRF, err, tail(string(out), 20))
+			params.Codec, params.CRF, err, toolbin.Tail(string(out), 20))
 	}
 	return nil
 }
@@ -105,9 +114,13 @@ func (e *Encoder) ConcatChunks(ctx context.Context, chunkPaths []string, finalOu
 		return fmt.Errorf("creating output dir: %w", err)
 	}
 
-	// リストファイルはユーザーの出力先を汚さないよう一時ディレクトリへ出す。
+	// リストファイルはツール一時領域（<base>/tmp）へ出す（AGENTS.md tmp規約準拠）。
 	// -safe 0 により絶対パス参照を許可している。
-	tmpDir, err := os.MkdirTemp("", "engram-concat-")
+	tmpBase, err := toolbin.TempRoot()
+	if err != nil {
+		return err
+	}
+	tmpDir, err := os.MkdirTemp(tmpBase, "concat-")
 	if err != nil {
 		return fmt.Errorf("creating concat temp dir: %w", err)
 	}
@@ -127,7 +140,7 @@ func (e *Encoder) ConcatChunks(ctx context.Context, chunkPaths []string, finalOu
 		"-f", "concat", "-safe", "0", "-i", listPath,
 		"-c", "copy", finalOutputPath)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("concat failed: %w\n%s", err, tail(string(out), 20))
+		return fmt.Errorf("concat failed: %w\n%s", err, toolbin.Tail(string(out), 20))
 	}
 	return nil
 }
@@ -171,10 +184,3 @@ func concatEscape(p string) string {
 }
 
 // tail は文字列の末尾 maxLines 行のみを返す（エラーメッセージ用の切り詰め）。
-func tail(s string, maxLines int) string {
-	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
-	if len(lines) > maxLines {
-		lines = lines[len(lines)-maxLines:]
-	}
-	return strings.Join(lines, "\n")
-}
