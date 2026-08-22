@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -24,35 +23,46 @@ import (
 
 func newOptimizeCmd() *cobra.Command {
 	var (
-		output  string
-		shot    int
-		codec   string
-		preset  string
-		tui     bool
-		logFile string
+		output   string
+		shot     int
+		codec    string
+		preset   string
+		audio    string
+		tui      bool
+		headless bool
+		logFile  string
 	)
 
 	cmd := &cobra.Command{
-		Use:   "optimize <input>",
-		Args:  cobra.ExactArgs(1),
+		Use:   "optimize [input]",
+		Args:  cobra.MaximumNArgs(1),
 		Short: "Per-shot optimize: detect scenes, bisect CRF per shot, lossless concat",
-		Long: `Full Per-Shot optimization pipeline:
+		Long: `Per-Shot optimization pipeline:
 
   1. scene detection (av-scenechange via FFmpeg Y4M pipe)
   2. per-shot CRF bisection: find the largest CRF whose VMAF
      harmonic_mean reaches the target score
-  3. lossless concatenation of the chosen chunks
+  3. lossless concatenation of the chosen chunks + audio muxing
 
-Temporary trial files live under build/tmp/<job-id>/ and are removed on
-success (kept on failure for debugging). Output defaults to
-<input>.opt.mkv next to the source; override with --out.
+Launch modes (see memo.md "TUIウィザード化"):
+  - interactive terminal without <input>: opens the setup wizard
+  - interactive terminal with <input>: runs immediately (plain logs)
+  - pipes / CI / redirects: always plain logs (--tui is ignored)
+  - --headless: never show any interactive UI
+
+Temporary trial files live under <tmp-root>/<job-id>/ and are removed on
+success (kept on failure for debugging). Output defaults to <input>.opt.mkv
+next to the source; override with --out.
 
 Use --shot N for a debug run of a single scene's CRF search
 (no concat; the winning trial chunk is kept).`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			input := args[0]
+			input := ""
+			if len(args) > 0 {
+				input = args[0]
+			}
 
 			// --log-file: 無人実行向けにログをファイルへも二重化する
 			var logSink io.Writer // --tui 時は ui.Options.LogMirror に渡し、表示中も二重化を維持する
@@ -68,94 +78,163 @@ Use --shot N for a debug run of a single scene's CRF search
 				defer log.SetOutput(prev)
 			}
 
-			root, err := toolbin.RepoRoot()
-			if err != nil {
-				return err
+			mode, merr := decideLaunch(len(args) > 0, ui.IsTerminal(), tui, headless)
+			if merr != nil {
+				return merr
 			}
-			jobDir := filepath.Join(root, "build", "tmp", time.Now().Format("20060102-150405"))
+
+			tmpRoot, terr := toolbin.TempRoot()
+			if terr != nil {
+				return terr
+			}
+			jobDir := filepath.Join(tmpRoot, time.Now().Format("20060102-150405"))
 
 			cfg, err := buildSearchConfig(codec, preset)
 			if err != nil {
 				return err
 			}
+			audioMode, aerr := domain.ParseAudioMode(audio)
+			if aerr != nil {
+				return aerr
+			}
+			log.Printf("[optimize] audio mode: %s", audioMode)
 
-			// デバッグモード: 単一シーンの二分探索のみ（結合しない）
+			// デバッグモード: 単一シーンの二分探索のみ（結合しない）。フラグ専用でウィザード対象外。
 			if shot >= 0 {
+				if input == "" {
+					return fmt.Errorf("--shot requires an input video path")
+				}
 				return runShotDebug(ctx, input, shot, cfg, jobDir)
 			}
 
-			outPath := output
-			if outPath == "" {
-				outPath = strings.TrimSuffix(input, filepath.Ext(input)) + ".opt.mkv"
-			}
-			// 成功時に jobDir を丸ごと削除するため、出力先がその配下だと消えてしまう
-			if err := ensureOutside(jobDir, outPath); err != nil {
-				return err
-			}
+			switch mode {
+			case launchWizard:
+				return launchWizardMode(ctx, input, output, cfg, audioMode, logSink)
 
-			orch := &engine.Orchestrator{
-				Detector:  avscenechange.New(),
-				Encoder:   ffenc.New(),
-				Evaluator: libvmaf.New(),
-			}
-
-			// TUIモード。端末がなければ平文ログへフォールバックする。
-			var report *engine.PipelineReport
-			if tui {
-				rep, uerr := ui.Run(ctx, orch, input, outPath, jobDir, cfg, ui.Options{
+			case launchTUI:
+				outPath := defaultOutputPathIfEmpty(output, input)
+				if err := ensureOutside(jobDir, outPath); err != nil {
+					return err
+				}
+				rep, uerr := ui.Run(ctx, newOrchestrator(audioMode), input, outPath, jobDir, cfg, ui.Options{
 					InputPath:  input,
 					OutputPath: outPath,
 					Codec:      cfg.Codec,
 					Preset:     preset,
 					Target:     cfg.TargetScore,
+					Audio:      string(audioMode),
 					LogMirror:  logSink,
 				})
-				switch {
-				case uerr == nil:
-					report = rep
-				case errors.Is(uerr, ui.ErrNoTTY):
-					log.Printf("[optimize] %v; falling back to plain logs", uerr)
-				default:
+				if uerr != nil {
 					return uerr
 				}
-			}
-			if report == nil {
-				rep, perr := orch.Run(ctx, input, outPath, jobDir, cfg, engine.ProgressCallbacks{
-					OnDetectionDone: func(scenes []domain.Scene) {
-						log.Printf("[optimize] detected %d scene(s)", len(scenes))
-					},
-					OnSceneStart: func(i, total int) {
-						log.Printf("[optimize] shot %d/%d start", i+1, total)
-					},
-					OnTrial: func(tr engine.Trial) {
-						status := "MISS"
-						if tr.MetTarget {
-							status = "HIT "
-						}
-						log.Printf("[optimize] shot %d trial crf=%2d harmonic_mean=%6.2f min=%6.2f [%s]",
-							tr.Scene.Index, tr.CRF, tr.Metrics.HarmonicMean, tr.Metrics.Min, status)
-					},
-					OnSceneDone: func(i, _ int, r *engine.Result) {
-						log.Printf("[optimize] shot %d done: crf=%d met=%v trials=%d",
-							i, r.CRF, r.MetTarget, r.Trials)
-					},
-				})
+				printSummary(input, rep)
+				return nil
+
+			default: // launchPlain
+				outPath := defaultOutputPathIfEmpty(output, input)
+				if err := ensureOutside(jobDir, outPath); err != nil {
+					return err
+				}
+				report, perr := orchRun(ctx, input, outPath, jobDir, cfg, audioMode)
 				if perr != nil {
 					return perr
 				}
-				report = rep
+				printSummary(input, report)
+				return nil
 			}
-			printSummary(input, report)
-			return nil
 		},
 	}
 	cmd.Flags().StringVarP(&output, "out", "o", "", "final output path (default: <input>.opt.mkv)")
 	cmd.Flags().IntVar(&shot, "shot", -1, "debug: run CRF search on this scene index only")
 	cmd.Flags().StringVar(&codec, "codec", string(domain.CodecH264), "encode codec: h264 | hevc | av1")
 	cmd.Flags().StringVar(&preset, "preset", "medium", "encoder preset (identical across all trials)")
+	cmd.Flags().StringVar(&audio, "audio", string(domain.DefaultAudioMode), "final audio track: copy | opus | aac | none")
+	cmd.Flags().BoolVar(&headless, "headless", false, "never show any interactive UI (plain logs only)")
 	cmd.Flags().BoolVar(&tui, "tui", false, "show interactive dashboard (falls back to plain logs when stdout is not a terminal)")
 	cmd.Flags().StringVar(&logFile, "log-file", "", "append log output to this file (for unattended runs)")
 	return cmd
+}
+
+// ===== 起動モード判定（memo.md「TUIウィザード化」） =====
+
+// launchMode は optimize の実行形態。
+type launchMode int
+
+const (
+	launchPlain  launchMode = iota // 平文ログで即実行
+	launchTUI                      // 実行ダッシュボード付き（--tui 明示時）
+	launchWizard                   // 設定ウィザードから開始（引数なし＋端末）
+)
+
+// decideLaunch は引数有無・TTY・フラグから起動モードを決定する。
+//
+// ルール:
+//   - --headless は常に平文ログ（--tui とは排他）。入力必須
+//   - 端末かつ入力なし → ウィザード（ダブルクリック/裸起動の正規フロー）
+//   - 端末以外（パイプ/CI/リダイレクト）では対話UIを出さない
+//   - 入力あり＋端末での --tui のみダッシュボード。それ以外の入力ありは即実行
+func decideLaunch(hasInput, tty, tuiFlag, headless bool) (launchMode, error) {
+	switch {
+	case headless && tuiFlag:
+		return launchPlain, fmt.Errorf("--tui and --headless are mutually exclusive")
+	case headless:
+		if !hasInput {
+			return launchPlain, fmt.Errorf("--headless requires an input video path")
+		}
+		return launchPlain, nil
+	case !hasInput && tty:
+		return launchWizard, nil
+	case !hasInput:
+		return launchPlain, fmt.Errorf("input video is required in non-interactive sessions")
+	case tuiFlag && tty:
+		return launchTUI, nil
+	default:
+		return launchPlain, nil
+	}
+}
+
+// newOrchestrator は実コンポーネントを配線した司令塔を組み立てる。
+func newOrchestrator(audio domain.AudioMode) *engine.Orchestrator {
+	return &engine.Orchestrator{
+		Detector:  avscenechange.New(),
+		Encoder:   ffenc.New(),
+		Evaluator: libvmaf.New(),
+		Muxer:     ffenc.New(),
+		Audio:     audio,
+	}
+}
+
+// defaultOutputPathIfEmpty は出力未指定時に <入力>.opt.mkv へ解決する。
+func defaultOutputPathIfEmpty(output, input string) string {
+	if output != "" {
+		return output
+	}
+	return strings.TrimSuffix(input, filepath.Ext(input)) + ".opt.mkv"
+}
+
+// orchRun は平文ログモードでのパイプライン実行（進捗を log へ出す）。
+func orchRun(ctx context.Context, input, outPath, jobDir string, cfg domain.SearchConfig, audio domain.AudioMode) (*engine.PipelineReport, error) {
+	return newOrchestrator(audio).Run(ctx, input, outPath, jobDir, cfg, engine.ProgressCallbacks{
+		OnDetectionDone: func(scenes []domain.Scene) {
+			log.Printf("[optimize] detected %d scene(s)", len(scenes))
+		},
+		OnSceneStart: func(i, total int) {
+			log.Printf("[optimize] shot %d/%d start", i+1, total)
+		},
+		OnTrial: func(tr engine.Trial) {
+			status := "MISS"
+			if tr.MetTarget {
+				status = "HIT "
+			}
+			log.Printf("[optimize] shot %d trial crf=%2d harmonic_mean=%6.2f min=%6.2f [%s]",
+				tr.Scene.Index, tr.CRF, tr.Metrics.HarmonicMean, tr.Metrics.Min, status)
+		},
+		OnSceneDone: func(i, _ int, r *engine.Result) {
+			log.Printf("[optimize] shot %d done: crf=%d met=%v trials=%d",
+				i, r.CRF, r.MetTarget, r.Trials)
+		},
+	})
 }
 
 // buildSearchConfig はCLIフラグ値から探索設定を構築する。
@@ -228,29 +307,4 @@ func ensureOutside(jobDir, output string) error {
 		return fmt.Errorf("output path %q must be outside the temp dir %q", output, jobDir)
 	}
 	return nil
-}
-
-// printSummary は完了サマリ（達成率・サイズ削減・出力先）を出す。
-func printSummary(input string, r *engine.PipelineReport) {
-	met := 0
-	for _, res := range r.Results {
-		if res.MetTarget {
-			met++
-		}
-	}
-	log.Printf("[optimize] %d/%d shot(s) met target score", met, len(r.Results))
-
-	var inSize, outSize int64
-	if st, err := os.Stat(input); err == nil {
-		inSize = st.Size()
-	}
-	if st, err := os.Stat(r.OutputPath); err == nil {
-		outSize = st.Size()
-	}
-	if inSize > 0 && outSize > 0 {
-		log.Printf("[optimize] size: %.2f MB -> %.2f MB (-%.1f%%)",
-			float64(inSize)/(1<<20), float64(outSize)/(1<<20),
-			100*(1-float64(outSize)/float64(inSize)))
-	}
-	log.Printf("[optimize] output: %s (total trials=%d)", r.OutputPath, r.TotalTrials)
 }

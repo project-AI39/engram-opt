@@ -6,22 +6,39 @@ import (
 	"time"
 )
 
-// View はダッシュボードを描画する。
+// View は現在のステージに応じた画面を描画する。
 //
-// レイアウト:
+//	setup   : 設定ウィザード（wizard.go）
+//	running : 実行ダッシュボード（下記レイアウト）
+//	summary : 完了サマリー
+func (m Model) View() string {
+	switch m.stage {
+	case stageSetup:
+		return renderSetup(m)
+	case stageSummary:
+		return m.renderSummary()
+	default:
+		return m.renderDashboard()
+	}
+}
+
+// renderDashboard は実行中ダッシュボードを描画する。
 //
 //	ヘッダ（入出力・設定）
 //	全体進捗バー＋経過時間
 //	シーン一覧テーブル
 //	ログテール
 //	フッタ
-func (m Model) View() string {
+func (m Model) renderDashboard() string {
 	var b strings.Builder
 
 	b.WriteString(titleStyle.Render("engram optimizer") + "  " +
 		dimStyle.Render(shorten(m.opts.InputPath, 30)+" -> "+shorten(m.opts.OutputPath, 30)))
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("codec=%s preset=%s target=%.1f", m.opts.Codec, m.opts.Preset, m.opts.Target))
+	if m.opts.Audio != "" {
+		b.WriteString(fmt.Sprintf(" audio=%s", m.opts.Audio))
+	}
 	b.WriteString("\n\n")
 
 	// 全体進捗
@@ -178,4 +195,52 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// renderSummary は完了サマリーを描画する（memo.md「TUIウィザード化」）。
+// 出力先／サイズ削減率／シーン別採用CRF一覧／達成率を表示し、キー入力で終了を待つ。
+func (m Model) renderSummary() string {
+	r := m.report
+	var b strings.Builder
+
+	b.WriteString(titleStyle.Render("処理が完了しました") + "\n\n")
+	if r != nil {
+		b.WriteString(fmt.Sprintf("出力先: %s\n", r.OutputPath))
+	}
+
+	// サイズ削減（実ファイル計測に成功した場合のみ）
+	if m.inSize > 0 && m.outSize > 0 {
+		b.WriteString(fmt.Sprintf("サイズ: %.2f MB → %.2f MB (%s)\n",
+			float64(m.inSize)/(1<<20), float64(m.outSize)/(1<<20),
+			hitStyle.Render(fmt.Sprintf("-%.1f%%", 100*(1-float64(m.outSize)/float64(m.inSize))))))
+	}
+
+	if r != nil && len(r.Results) > 0 {
+		met := 0
+		for _, res := range r.Results {
+			if res.MetTarget {
+				met++
+			}
+		}
+		b.WriteString(fmt.Sprintf("達成: %s / 全 %d shot · 試行 %d 回 · 所要 %s\n\n",
+			hitStyle.Render(fmt.Sprintf("%d", met)), len(r.Results),
+			r.TotalTrials, formatDuration(m.elapsed)))
+
+		b.WriteString(headerStyle.Render("SHOT  FRAMES       CRF   VMAF(harm)  MET") + "\n")
+		for _, res := range r.Results {
+			metCell := missStyle.Render("MISS")
+			if res.MetTarget {
+				metCell = hitStyle.Render("HIT ")
+			}
+			b.WriteString(fmt.Sprintf("%-5d %-12s %-5d %-10.2f  %s\n",
+				res.Scene.Index,
+				fmt.Sprintf("%d-%d", res.Scene.StartFrame, res.Scene.EndFrame),
+				res.CRF, res.Metrics.HarmonicMean, metCell))
+		}
+	} else {
+		b.WriteString(fmt.Sprintf("\n試行 %d 回 · 所要 %s\n", m.trialCount, formatDuration(m.elapsed)))
+	}
+
+	b.WriteString("\n" + dimStyle.Render("[Enter / q] 終了") + "\n")
+	return b.String()
 }

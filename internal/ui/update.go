@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"os"
 	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
@@ -27,11 +28,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "esc", "ctrl+c":
-			return m, tea.Quit
+		switch m.stage {
+		case stageSetup:
+			return m.handleSetupKey(msg)
+		case stageSummary:
+			// 完了サマリー: ダブルクリック起動時のコンソール即消滅を防ぐため
+			// ユーザーが明示的に抜けるまで待つ（memo.md「TUIウィザード化」）
+			switch msg.String() {
+			case "enter", "q", "esc", "ctrl+c":
+				return m, tea.Quit
+			}
+			return m, nil
+		default: // stageRun
+			switch msg.String() {
+			case "q", "esc", "ctrl+c":
+				return m, tea.Quit
+			}
+			return m, nil
 		}
-		return m, nil
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -44,6 +58,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
+		if m.finished {
+			return m, nil // 完了後はタイマー連鎖を止める（サマリーの経過時間を固定）
+		}
 		m.elapsed = time.Since(m.started)
 		return m, tea.Tick(time.Second, func(time.Time) tea.Msg { return tickMsg{} })
 
@@ -88,15 +105,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pushLog(string(msg))
 		return m, nil
 
+	// ===== ウィザード → 実行の遷移系 =====
+
+	case pipelineStartedMsg:
+		// ファクトリで既定出力名が解決されたパスをヘッダ表示へ反映する
+		m.opts.InputPath = msg.input
+		m.opts.OutputPath = msg.output
+		m.stage = stageRun
+		m.started = time.Now() // ウィザード操作時間は経過時間に含めない
+		return m, nil
+
+	case setupErrorMsg:
+		m.wiz.formErr = msg.err.Error()
+		m.wiz.starting = false // 再挑戦できるように解除
+		return m, nil
+
 	case pipelineDoneMsg:
 		m.report = msg
 		m.finished = true
 		m.elapsed = time.Since(m.started)
 		m.phase = phaseDone
 		_ = m.progress.SetPercent(1.0)
-		return m, tea.Quit
+		// 即quitせずサマリー画面へ遷移する（キー待ち。Update冒頭のKeyMsgでquit）
+		m.stage = stageSummary
+		if st, err := os.Stat(m.opts.InputPath); err == nil {
+			m.inSize = st.Size()
+		}
+		if st, err := os.Stat(msg.OutputPath); err == nil {
+			m.outSize = st.Size()
+		}
+		return m, nil
 
 	case pipelineErrMsg:
+		// 失敗内容を読む時間を確保するため、即quitせずFAILED表示でキー待ちにする
 		m.err = msg.err
 		for _, st := range m.shots {
 			if st.status == shotRunning {
@@ -104,7 +145,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.phase = phaseFailed
-		return m, tea.Quit
+		return m, nil
 	}
 	return m, nil
 }

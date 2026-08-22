@@ -104,11 +104,21 @@ func TestModelCompletionSwitchesToConcatThenDone(t *testing.T) {
 	report := &engine.PipelineReport{OutputPath: "out.opt.mkv"}
 	next, cmd := m.Update(pipelineDoneMsg(report))
 	m = next.(Model)
-	if cmd == nil {
-		t.Fatal("done should quit the program")
+	// 完了では即quitせず、サマリー画面でキー待ちへ遷移する（memo.md「TUIウィザード化」）
+	if cmd != nil {
+		t.Fatal("done should NOT quit; it must wait on the summary screen")
 	}
 	if m.phase != phaseDone || !m.finished || m.report != report {
 		t.Fatalf("final state: phase=%v finished=%v report=%+v", m.phase, m.finished, m.report)
+	}
+	if m.stage != stageSummary {
+		t.Fatalf("stage after done = %v, want summary", m.stage)
+	}
+	// サマリーでのキー入力で初めて終了する
+	next, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("summary should quit on Enter")
 	}
 }
 
@@ -119,8 +129,9 @@ func TestModelFailureMarksRunningShotFailed(t *testing.T) {
 
 	next, cmd := m.Update(pipelineErrMsg{err: errors.New("boom")})
 	m = next.(Model)
-	if cmd == nil {
-		t.Fatal("failure should quit the program")
+	// 失敗内容を読む時間を確保するため、即quitしない（qで明示的に抜ける）
+	if cmd != nil {
+		t.Fatal("failure should NOT auto-quit; user reads the error and presses q")
 	}
 	if m.phase != phaseFailed || m.err == nil {
 		t.Fatalf("phase=%v err=%v", m.phase, m.err)

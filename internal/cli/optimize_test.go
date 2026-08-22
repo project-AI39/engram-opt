@@ -57,3 +57,55 @@ func TestBuildSearchConfigRejectsUnknownCodec(t *testing.T) {
 		t.Fatal("unsupported codec must be rejected at CLI layer")
 	}
 }
+
+// 起動モード判定（memo.md「TUIウィザード化」のマトリクス照合）。
+func TestDecideLaunch(t *testing.T) {
+	cases := []struct {
+		name     string
+		hasInput bool
+		tty      bool
+		tui      bool
+		headless bool
+		want     launchMode
+		wantErr  bool
+	}{
+		{"double-click / bare launch", false, true, false, false, launchWizard, false},
+		{"terminal with input runs plain", true, true, false, false, launchPlain, false},
+		{"terminal with input and --tui", true, true, true, false, launchTUI, false},
+		{"pipe with input ignores tui", true, false, true, false, launchPlain, false},
+		{"pipe without input errors", false, false, false, false, 0, true},
+		{"headless forces plain", true, true, false, true, launchPlain, false},
+		{"headless in pipe", true, false, false, true, launchPlain, false},
+		{"headless requires input", false, true, false, true, 0, true},
+		{"tui and headless are exclusive", true, true, true, true, 0, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := decideLaunch(tc.hasInput, tc.tty, tc.tui, tc.headless)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got mode %v", got)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("mode = %v, err = %v; want %v", got, err, tc.want)
+			}
+		})
+	}
+}
+
+// 出力未指定時の既定名 <入力>.opt.mkv（拡張子置換）。
+func TestDefaultOutputPathIfEmpty(t *testing.T) {
+	cases := []struct{ out, in, want string }{
+		{"", "video.mp4", "video.opt.mkv"},
+		{"", "a/b/c.MOV", "a/b/c.opt.mkv"},
+		{"explicit.mkv", "video.mp4", "explicit.mkv"}, // 指定済みなら素通し
+		{"", "noext", "noext.opt.mkv"},
+	}
+	for _, c := range cases {
+		if got := defaultOutputPathIfEmpty(c.out, c.in); got != c.want {
+			t.Fatalf("defaultOutputPathIfEmpty(%q,%q) = %q, want %q", c.out, c.in, got, c.want)
+		}
+	}
+}
