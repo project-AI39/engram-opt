@@ -59,6 +59,9 @@ func launchWizardMode(ctx context.Context, input, output string, cfg domain.Sear
 		if derr := engine.RequireDistinctPaths(in, out); derr != nil {
 			return ui.PreparedPipeline{}, derr
 		}
+		if oerr := checkOutputExt(out); oerr != nil {
+			return ui.PreparedPipeline{}, oerr
+		}
 		if aerr := ensureOutside(jobDir, out); aerr != nil {
 			return ui.PreparedPipeline{}, aerr
 		}

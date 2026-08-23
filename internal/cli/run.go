@@ -73,6 +73,19 @@ func registerRun(root *cobra.Command) {
 			}
 		}
 
+		// 起動時事前チェック（探索コストを払う前に確定失敗を拒否する）
+		if input != "" {
+			if ierr := checkInputFile(input); ierr != nil {
+				return ierr
+			}
+			if oerr := checkOutputExt(output); oerr != nil {
+				return oerr
+			}
+			if aerr := checkDistinctArtifacts(input, output, logFile); aerr != nil {
+				return aerr
+			}
+		}
+
 		// --log-file: 無人実行向けにログをファイルへも二重化する
 		var logSink io.Writer // --tui 時は ui.Options.LogMirror に渡し、表示中も二重化を維持する
 		if logFile != "" {
@@ -116,6 +129,21 @@ func registerRun(root *cobra.Command) {
 			}
 			outW, outH = dw, dh
 			log.Printf("[optimize] --out-res empty: following input resolution %dx%d", outW, outH)
+		}
+		if input != "" {
+			// 単一フレーム等の極短入力はシーン検出器が処理できず内部エラーになるため、
+			// 探索開始前に分かりやすい形で拒否する
+			dur, derr := ffenc.ProbeDurationSeconds(ctx, input)
+			if derr != nil {
+				return fmt.Errorf("checking input duration: %w", derr)
+			}
+			if dur < minInputDurationSeconds {
+				return fmt.Errorf("input video is too short (%.3fs): at least a few frames are required", dur)
+			}
+			// 黙って落とす可能性のある構成（複数音声・字幕）を早期に周知する
+			for _, note := range ffenc.ProbeStreamNotes(ctx, input) {
+				log.Printf("[optimize] note: %s", note)
+			}
 		}
 
 		cfg, err := buildSearchConfig(codec, preset, metric, evalProf, outW, outH, encArgs)
