@@ -458,18 +458,3 @@ func TestWizardEvalAlgorithmAndResolutionSelection(t *testing.T) {
 		t.Fatalf("resolution should reset to first on algorithm change: %s", got)
 	}
 }
-
-// AV1選択時、数値プリセットへx264流名称の近似が併記される（例: 6 (medium)）。
-func TestSetupViewAnnotatesAv1Preset(t *testing.T) {
-	m := testWizardModel(t)
-	m, _ = step(t, m, keyTab()) // focus -> codec
-	m, _ = step(t, m, keyRight())
-	m, _ = step(t, m, keyRight()) // -> av1
-	out := m.View()
-	if !strings.Contains(out, "6 (medium)") {
-		t.Fatalf("view missing annotated av1 preset:\n%s", out)
-	}
-	if strings.Contains(out, "12 (superfast)") {
-		t.Fatalf("non-default presets should not be pre-selected: %s", out)
-	}
-}

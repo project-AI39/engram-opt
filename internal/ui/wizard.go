@@ -277,16 +277,6 @@ func codecLabels() []string {
 	return []string{"h264 (libx264)", "hevc (libx265)", "av1 (libsvtav1)"}
 }
 
-// svtPresetEquivLabel はSVT-AV1数値プリセットの「x264流名称の近似」を返す。
-// 対応は encoder/ffmpeg.svtPreset の変換表と同じもの（逆方向）。未知値は空文字。
-func svtPresetEquivLabel(num string) string {
-	m := map[string]string{
-		"1": "veryslow", "2": "slower", "4": "slow", "6": "medium",
-		"8": "fast", "10": "faster", "12": "veryfast", "13": "superfast",
-	}
-	return m[num]
-}
-
 func audioLabels() []string {
 	return []string{"copy", "opus (libopus)", "aac", "none (-an)"}
 }
@@ -598,19 +588,9 @@ func renderSetup(m Model) string {
 	var rows []string
 	rows = append(rows, row("入力ファイル", w.focus == fInput, w.input.View()))
 	rows = append(rows, "", sectionCaption("encode"))
-	var presetView string
-	{
-		// AV1の数値プリセットには x264流名称の近似対応があるため併記する（ffmpeg利用者向け）
-		presetView = w.preset()
-		if codecChoices[w.codecIdx] == domain.CodecAV1 {
-			if eq := svtPresetEquivLabel(presetView); eq != "" {
-				presetView = fmt.Sprintf("%s (%s)", presetView, eq)
-			}
-		}
-	}
 	rows = append(rows,
 		row("Codec:", w.focus == fCodec, selectValue(codecLabels()[w.codecIdx], w.focus == fCodec)),
-		row("Preset:", w.focus == fPreset, selectValue(presetView, w.focus == fPreset)),
+		row("Preset:", w.focus == fPreset, selectValue(w.preset(), w.focus == fPreset)),
 		row("Min CRF:", w.focus == fMinCRF, w.minCRF.View()),
 		row("Max CRF:", w.focus == fMaxCRF, w.maxCRF.View()),
 		row("Target VMAF:", w.focus == fTarget, w.target.View()),
