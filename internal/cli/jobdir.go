@@ -23,7 +23,9 @@ func newJobDir(tmpRoot string) string {
 func sweepStaleJobs(tmpRoot string) {
 	entries, err := os.ReadDir(tmpRoot)
 	if err != nil {
-		return // tmpが未作成など。致命的ではない
+		// 掃除はベストエフォートだが完全な黙黙殺はしない（観測可能性のため警告のみ）
+		log.Printf("[optimize] warning: failed to read temp root for sweeping: %v", err)
+		return
 	}
 	for _, e := range entries {
 		if !e.IsDir() {

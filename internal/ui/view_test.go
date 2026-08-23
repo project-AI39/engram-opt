@@ -31,7 +31,7 @@ func TestShorten(t *testing.T) {
 			}
 			limit := tc.max
 			if tc.max < 3 {
-				limit = tc.max // truncate フォールバック経路も max 文字以内
+				limit = tc.max // 中略（...挿入）経路も max 文字以内
 			}
 			if n := len([]rune(got)); n > limit {
 				t.Fatalf("result %d runes exceeds limit %d: %q", n, limit, got)

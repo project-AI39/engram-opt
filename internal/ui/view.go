@@ -286,7 +286,7 @@ func shorten(p string, max int) string {
 		return p
 	}
 	half := (max - 3) / 2
-	// max 極小時に half<=0 へ倒れ込むと負/零インデックス参照になるため打ち切りへフォールバック
+	// max 極小時に half<=0 へ倒れ込むと負/零インデックス参照になるため短縮表示へ打ち切る
 	if half <= 0 {
 		return truncate(p, max)
 	}
@@ -428,12 +428,12 @@ func (m Model) renderSummary() string {
 	return b.String()
 }
 
-// totalTrials はレポートがあればその合計試行数を、無ければ実測カウントを返す。
-func totalTrials(r *engine.PipelineReport, fallback int) int {
+// totalTrials はレポート確定前のライブ試行数（実測カウント）を返す。
+func totalTrials(r *engine.PipelineReport, liveCount int) int {
 	if r != nil {
 		return r.TotalTrials
 	}
-	return fallback
+	return liveCount
 }
 
 // ===== setupフェーズの描画（ウィザード画面。状態・キー処理はwizard.go） =====

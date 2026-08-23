@@ -38,7 +38,7 @@ func keyRunes(s string) tea.KeyMsg {
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 }
 
-// ウィザードの初期選択CodecはAV1（CLIフラグ未指定時のフォールバック既定）。
+// ウィザードの初期選択CodecはAV1（CLIフラグ未指定時の既定選択）。
 // PresetリストもAV1用へ再構築され、svtav1既定のspeed 6が選ばれている。
 func TestNewWizardFormDefaultsToAV1(t *testing.T) {
 	w := newWizardForm(Options{})

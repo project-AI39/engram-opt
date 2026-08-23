@@ -154,7 +154,7 @@ func newWizardForm(opts Options) wizardForm {
 	outRes.Prompt = ""
 	outRes.CharLimit = 32
 	// CLI境界で入力解像度へ解決済みのため、通常は具体的な実寸が初期値として入る。
-	// ユーザーが全消去して空欄で確定した場合は「入力と同じ」扱いへフォールバックする。
+	// ユーザーが全消去して空欄で確定した場合は仕様どおり「入力と同じ」扱いへ正規化する。
 	if opts.OutRes != "" {
 		outRes.SetValue(opts.OutRes)
 	}
@@ -212,7 +212,7 @@ func newWizardForm(opts Options) wizardForm {
 		}
 	}
 	// Options.Codecが空（=CLIフラグ未指定でウィザード単独起動）のときはAV1を既定選択とする。
-	// 実値指定があれば上のループが上書きするため、ここでの代入はフォールバックとして機能する。
+	// 実値指定があれば上のループが上書きするため、ここでの代入は既定選択として機能する。
 	if opts.Codec == "" {
 		for i, c := range codecChoices {
 			if c == domain.CodecAV1 {

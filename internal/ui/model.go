@@ -98,7 +98,7 @@ type Options struct {
 	Target     float64
 
 	// MinCRF / MaxCRF / BitDepth はウィザード初期値（memo.md「パラメータ一覧」A-3〜6）。
-	// ゼロ値は「未指定」扱いでドメイン既定へフォールバックする。
+	// ゼロ値は「未指定」扱いでドメイン既定へ正規化する。
 	MinCRF   int
 	MaxCRF   int
 	BitDepth int

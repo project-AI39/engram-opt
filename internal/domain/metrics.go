@@ -10,7 +10,7 @@ type QualityMetrics struct {
 }
 
 // ScoreMetric は合否判定の基準となるVMAF統計の種別。
-// ゼロ値は MetricHarmonic（=従来の固定仕様）として扱われる。
+// ゼロ値は「未指定」であり、使用前に SearchConfig.EffectiveMetric() で既定へ正規化する。
 type ScoreMetric string
 
 const (
@@ -29,16 +29,19 @@ func ParseScoreMetric(s string) (ScoreMetric, error) {
 	}
 }
 
-// Score は指定種別のスコアを返す。未知種別はパニックではなくharmonicへフォールバックする
-// （呼び出し側でValidate済みという前提の防御実装）。
+// Score は指定種別のスコアを返す。
+// 呼び出し側は必ず SearchConfig.EffectiveMetric() の結果（正規化済み3値のいずれか）を
+// 渡す契約とし、それ以外は黙って代替せずパニックで即座に暴露する（フェイルファスト）。
 func (q QualityMetrics) Score(m ScoreMetric) float64 {
 	switch m {
+	case MetricHarmonic:
+		return q.HarmonicMean
 	case MetricMean:
 		return q.Mean
 	case MetricMin:
 		return q.Min
 	default:
-		return q.HarmonicMean
+		panic(fmt.Sprintf("QualityMetrics.Score: unnormalized ScoreMetric %q (pass EffectiveMetric() result)", m))
 	}
 }
 

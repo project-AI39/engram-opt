@@ -1,6 +1,10 @@
 package domain
 
-import "testing"
+import (
+	"fmt"
+	"strings"
+	"testing"
+)
 
 // 合否判定は「指定指標スコア >= targetScore」。境界値（ちょうど一致）が「達成」扱い。
 func TestTargetMetBoundary(t *testing.T) {
@@ -17,7 +21,7 @@ func TestTargetMetBoundary(t *testing.T) {
 	}
 }
 
-// Score は指標種別に応じて正しい統計を返す。未知種別はharmonicへフォールバックする。
+// Score は正規化済み3値に応じて正しい統計を返す。
 func TestQualityMetricsScore(t *testing.T) {
 	q := QualityMetrics{HarmonicMean: 90.0, Mean: 95.5, Min: 70.2}
 	cases := []struct {
@@ -27,8 +31,6 @@ func TestQualityMetricsScore(t *testing.T) {
 		{MetricHarmonic, 90.0},
 		{MetricMean, 95.5},
 		{MetricMin, 70.2},
-		{ScoreMetric("bogus"), 90.0}, // 防御フォールバック
-		{"", 90.0},                   // ゼロ値も既定扱い
 	}
 	for _, tc := range cases {
 		if got := q.Score(tc.m); got != tc.want {
@@ -71,5 +73,24 @@ func TestSearchConfigValidateMetric(t *testing.T) {
 	}
 	if got := unset.EffectiveMetric(); got != MetricHarmonic {
 		t.Fatalf("EffectiveMetric(unset) = %q, want harmonic", got)
+	}
+}
+
+// Score は正規化前の未知値・ゼロ値を黙って代替せずパニックで暴露する（フェイルファスト契約）。
+func TestScorePanicsOnUnnormalizedMetric(t *testing.T) {
+	q := QualityMetrics{HarmonicMean: 90.0}
+	for _, bad := range []ScoreMetric{"bogus", ""} {
+		func() {
+			defer func() {
+				r := recover()
+				if r == nil {
+					t.Fatalf("Score(%q) must panic on unnormalized metric", bad)
+				}
+				if !strings.Contains(fmt.Sprint(r), "unnormalized") {
+					t.Fatalf("panic message should mention unnormalized, got %v", r)
+				}
+			}()
+			_ = q.Score(bad)
+		}()
 	}
 }

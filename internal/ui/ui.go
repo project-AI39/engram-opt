@@ -18,7 +18,8 @@ import (
 )
 
 // ErrNoTTY はstdoutが端末でないためTUIを表示できないことを示す。
-// 呼び出し側はこのエラーを平文ログモードへのフォールバック合図として扱う。
+// 呼び出し側は黙って平文モードへ切り替えず、そのままエラーとして表面化させる
+// （--tui明示時の静かな縮退は禁止。起動モード分岐はcli側decideLaunchが担う）。
 var ErrNoTTY = errors.New("stdout is not a terminal; TUI unavailable")
 
 // IsTerminal はstdoutが端末に接続されているかどうかを返す。
