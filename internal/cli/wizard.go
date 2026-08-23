@@ -52,6 +52,10 @@ func launchWizardMode(ctx context.Context, input, output string, cfg domain.Sear
 		if in == "" {
 			return ui.PreparedPipeline{}, fmt.Errorf("input file is empty")
 		}
+		// 入力の存在チェック（CLIフラグ経路と同一の文言で早期に分かるようにする）
+		if ierr := checkInputFile(in); ierr != nil {
+			return ui.PreparedPipeline{}, ierr
+		}
 		if out == "" {
 			out = defaultOutputPathIfEmpty(out, in)
 		}

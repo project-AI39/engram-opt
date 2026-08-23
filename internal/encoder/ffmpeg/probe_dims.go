@@ -36,25 +36,27 @@ func ProbeVideoDims(ctx context.Context, inputPath string) (width, height int, e
 	return w, h, nil
 }
 
-// ProbeDurationSeconds は入力動画の再生時間（秒）を返す。
+// ProbeDurationSeconds は入力動画の再生時間（秒）と既知性を返す。
 // formatメタデータから取るためフレーム数カウントのような全デコードは発生しない。
 // 極端に短い入力（単一フレーム等）を探索開始前に拒否するための事前チェック用。
-func ProbeDurationSeconds(ctx context.Context, inputPath string) (float64, error) {
+// エレメンタリストリーム等 duration を持たない入力では ok=false を返す
+// （メタデータ欠落は入力の不正ではないため、呼び出し側はチェックをスキップする）。
+func ProbeDurationSeconds(ctx context.Context, inputPath string) (seconds float64, ok bool) {
 	ffprobePath, err := toolbin.Resolve("ffprobe")
 	if err != nil {
-		return 0, err
+		return 0, false
 	}
 	out, err := exec.CommandContext(ctx, ffprobePath,
 		"-v", "error", "-show_entries", "format=duration",
 		"-of", "csv=p=0", inputPath).Output()
 	if err != nil {
-		return 0, fmt.Errorf("ffprobe (duration) failed: %w", err)
+		return 0, false
 	}
 	d, perr := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 	if perr != nil || d < 0 {
-		return 0, fmt.Errorf("invalid duration in ffprobe output: %q", strings.TrimSpace(string(out)))
+		return 0, false // "N/A" 等。後段の正式な処理に判断を委ねる
 	}
-	return d, nil
+	return d, true
 }
 
 // ProbeStreamNotes は「黙って落とす」可能性のある入力構成を検出して注意文を返す。

@@ -132,12 +132,9 @@ func registerRun(root *cobra.Command) {
 		}
 		if input != "" {
 			// 単一フレーム等の極短入力はシーン検出器が処理できず内部エラーになるため、
-			// 探索開始前に分かりやすい形で拒否する
-			dur, derr := ffenc.ProbeDurationSeconds(ctx, input)
-			if derr != nil {
-				return fmt.Errorf("checking input duration: %w", derr)
-			}
-			if dur < minInputDurationSeconds {
+			// 探索開始前に分かりやすい形で拒否する。duration不明（エレメンタリ
+			// ストリーム等）は入力の不正ではないためスキップする
+			if dur, known := ffenc.ProbeDurationSeconds(ctx, input); known && dur < minInputDurationSeconds {
 				return fmt.Errorf("input video is too short (%.3fs): at least a few frames are required", dur)
 			}
 			// 黙って落とす可能性のある構成（複数音声・字幕）を早期に周知する
