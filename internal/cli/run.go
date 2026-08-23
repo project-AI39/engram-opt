@@ -363,11 +363,23 @@ func runShotDebug(ctx context.Context, input string, idx int, cfg domain.SearchC
 	return nil
 }
 
-// ensureOutside は output が jobDir 配下でないことを確認する。
-// 成功時には jobDir を丸ごと削除するため、配下にあると成果物も消えてしまう。
+// ensureOutside は output が jobDir 配下でも一時領域(tmpRoot)配下でもないことを確認する。
+// - jobDir配下: 成功時に丸ごと削除されるため成果物が消える
+// - tmpRoot配下: 掃除対象・配布パッケージのステージング元であり、ユーザー成果物の置き場所にならない
 // Windowsではパス大小文字を同一視する（C:\a と c:\A は同一）。
 func ensureOutside(jobDir, output string) error {
-	absJob, err := filepath.Abs(jobDir)
+	if err := ensureNotUnder(jobDir, output); err != nil {
+		return err
+	}
+	tmpRoot, err := toolbin.TempRoot()
+	if err != nil {
+		return err
+	}
+	return ensureNotUnder(tmpRoot, output)
+}
+
+func ensureNotUnder(root, output string) error {
+	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return err
 	}
@@ -376,11 +388,11 @@ func ensureOutside(jobDir, output string) error {
 		return err
 	}
 	if runtime.GOOS == "windows" {
-		absJob, absOut = strings.ToLower(absJob), strings.ToLower(absOut)
+		absRoot, absOut = strings.ToLower(absRoot), strings.ToLower(absOut)
 	}
-	rel, err := filepath.Rel(absJob, absOut)
+	rel, err := filepath.Rel(absRoot, absOut)
 	if err == nil && !strings.HasPrefix(rel, "..") {
-		return fmt.Errorf("output path %q must be outside the temp dir %q", output, jobDir)
+		return fmt.Errorf("output path %q must be outside the temp dir %q", output, root)
 	}
 	return nil
 }

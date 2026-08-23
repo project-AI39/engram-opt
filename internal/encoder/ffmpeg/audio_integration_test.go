@@ -4,6 +4,7 @@ import (
 	"context"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"engram-opt/internal/domain"
@@ -72,6 +73,20 @@ func TestMuxAudioIntegration(t *testing.T) {
 		}
 		if got := testutil.ProbeAudioStreams(t, ctx, out); len(got) != 0 {
 			t.Fatalf("silent input should produce no audio streams, got %+v", got)
+		}
+	})
+
+	// 音声なし入力へのopus/aac明示指定は「映像のみ」へ黙って縮退せずエラー（フェイルファスト）。
+	t.Run("silent input rejects explicit recompress modes", func(t *testing.T) {
+		for _, mode := range []domain.AudioMode{domain.AudioOpus, domain.AudioAAC} {
+			out := filepath.Join(dir, "silent_"+string(mode)+".mkv")
+			err := enc.MuxAudio(ctx, videoOnly, videoOnly, mode, out)
+			if err == nil {
+				t.Fatalf("silent input + --audio %s must be an error", mode)
+			}
+			if !strings.Contains(err.Error(), "no audio stream") {
+				t.Fatalf("err = %v, want no-audio-stream guidance", err)
+			}
 		}
 	})
 

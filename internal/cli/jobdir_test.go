@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"engram-opt/internal/toolbin"
 )
 
 func TestNewJobDirHasPIDAndTimestamp(t *testing.T) {
@@ -39,5 +41,29 @@ func TestSweepStaleJobsRemovesOnlyOldJobDirs(t *testing.T) {
 		if _, err := os.Stat(keep); err != nil {
 			t.Fatalf("non-stale dir must survive: %v", err)
 		}
+	}
+}
+
+// ensureOutside はjobDir配下に加え、tmpRoot配下への出力も拒否する。
+// tmpRoot直下の成果物は掃除対象かつ配布Zipのステージング元になるため（実害確認済み）。
+func TestEnsureOutsideRejectsTempRootSubtree(t *testing.T) {
+	tmpRoot, err := toolbin.TempRoot()
+	if err != nil {
+		t.Skipf("temp root unavailable: %v", err)
+	}
+	jobDir := newJobDir(tmpRoot)
+
+	// jobDir配下（従来どおり拒否）
+	if err := ensureOutside(jobDir, filepath.Join(jobDir, "out.mkv")); err == nil {
+		t.Fatal("output under jobDir must be rejected")
+	}
+	// tmpRoot直下（本修正で拒否される）
+	if err := ensureOutside(jobDir, filepath.Join(tmpRoot, "out.mkv")); err == nil {
+		t.Fatal("output directly under tmp root must be rejected")
+	}
+	// tmpRoot外は通過
+	outside := t.TempDir()
+	if err := ensureOutside(jobDir, filepath.Join(outside, "out.mkv")); err != nil {
+		t.Fatalf("output outside temp workspace must be accepted: %v", err)
 	}
 }

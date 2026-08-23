@@ -29,9 +29,10 @@ var audioCodecArgs = map[domain.AudioMode]string{
 //
 // 設計（memo.md「音声処理」）: 音声はシーン分割の対象外。ここで初めて1回だけ処理し、
 // 映像は常にストリームコピー（-c:v copy）するため再エンコードは発生しない。
-//   - copy : 元音声をそのままコピー（無劣化）
-//   - opus/aac: チャンネル数から自動判定したビットレートで再圧縮
-//   - 元動画に音声が無い場合: 全モード共通で映像のみを出力へ書き出す
+//   - copy : 元音声をそのままコピー（無劣化）。音声が無ければ映像のみ出力
+//   - opus/aac: チャンネル数から自動判定したビットレートで再圧縮。
+//     音声なし入力への明示指定は「映像のみ」へ黙って縮退させずエラーとする
+//     （フェイルファスト。意図的に音声を付けない場合は --audio none を使う）
 func (e *Encoder) MuxAudio(ctx context.Context, videoPath string, originalPath string, mode domain.AudioMode, outputPath string) error {
 	switch mode {
 	case domain.AudioCopy, domain.AudioOpus, domain.AudioAAC:
@@ -60,7 +61,11 @@ func (e *Encoder) MuxAudio(ctx context.Context, videoPath string, originalPath s
 
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-y"}
 	if audio.Channels == 0 {
-		// 音声なし入力: 映像のみをリマックスして完了（全モード共通の挙動）
+		// 音声なし入力。copyは「元の構成を維持」なので映像のみで妥当だが、
+		// opus/aacの明示指定は要求を満たせないため黙って縮退せずエラーにする
+		if mode != domain.AudioCopy {
+			return fmt.Errorf("input has no audio stream; --audio %s cannot be applied (use --audio none)", mode)
+		}
 		args = append(args, "-i", videoPath, "-map", "0:v:0", "-c", "copy", outputPath)
 	} else if mode == domain.AudioCopy {
 		args = append(args,
