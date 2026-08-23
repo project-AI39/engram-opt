@@ -13,7 +13,7 @@ import (
 
 // View は現在のステージに応じた画面を描画する。
 //
-//	setup   : 設定ウィザード（wizard.go）
+//	setup   : 設定ウィザード（下記 renderSetup）
 //	running : 実行ダッシュボード（下記レイアウト）
 //	summary : 完了サマリー
 func (m Model) View() string {
@@ -434,4 +434,72 @@ func totalTrials(r *engine.PipelineReport, fallback int) int {
 		return r.TotalTrials
 	}
 	return fallback
+}
+
+// ===== setupフェーズの描画（ウィザード画面。状態・キー処理はwizard.go） =====
+
+// renderSetup は設定ウィザード画面を描画する。
+// 項目の並びはタブ移動順（fInput→fOutput）と一致させる。視覚的な小節キャプション
+// （source / encode / evaluation / output）は順序を変えない装飾として挟む。
+func renderSetup(m Model) string {
+	w := &m.wiz
+
+	const labelW = 13
+	row := func(label string, focused bool, content string) string {
+		padded := fmt.Sprintf("%-*s", labelW, label)
+		if content == "" && !focused {
+			content = dimStyle.Render("(未設定)")
+		}
+		if focused {
+			return accentBar() + focusLabelStyle.Render(padded) + " " + selActiveStyle.Render(content)
+		}
+		return "  " + labelStyle.Render(padded) + " " + valueStyle.Render(content)
+	}
+
+	var rows []string
+	rows = append(rows, row("入力ファイル", w.focus == fInput, w.input.View()))
+	rows = append(rows, "", sectionCaption("encode"))
+	rows = append(rows,
+		row("Codec:", w.focus == fCodec, selectValue(codecLabels()[w.codecIdx], w.focus == fCodec)),
+		row("Preset:", w.focus == fPreset, selectValue(w.preset(), w.focus == fPreset)),
+		row("Min CRF:", w.focus == fMinCRF, w.minCRF.View()),
+		row("Max CRF:", w.focus == fMaxCRF, w.maxCRF.View()),
+		row("Target VMAF:", w.focus == fTarget, w.target.View()),
+		row("Metric:", w.focus == fMetric, selectValue(string(w.metric()), w.focus == fMetric)),
+	)
+	d := w.depth()
+	rows = append(rows,
+		row("Bit Depth:", w.focus == fDepth,
+			selectValue(fmt.Sprintf("%d (%s)", d, depthLabels[d]), w.focus == fDepth)),
+		row("Audio:", w.focus == fAudio, selectValue(audioLabels()[w.audioIdx], w.focus == fAudio)),
+		row("Extra Args:", w.focus == fEncArgs, w.encArgs.View()),
+		"", sectionCaption("evaluation"),
+		row("Eval Algorithm:", w.focus == fEvalAlg,
+			selectValue(w.evalAlgorithmID(), w.focus == fEvalAlg)),
+		row("Eval Resolution:", w.focus == fEvalRes,
+			selectValue(w.evalProfile().Name, w.focus == fEvalRes)),
+		"", sectionCaption("output"),
+		row("Out Res:", w.focus == fOutRes, w.outRes.View()),
+		row("Output:", w.focus == fOutput, w.output.View()),
+	)
+
+	body := strings.Join(rows, "\n")
+
+	var b strings.Builder
+	b.WriteString(brandHeader("セットアップ") + "\n\n")
+	b.WriteString(titledPanel("設定", body) + "\n")
+
+	if w.formErr != "" {
+		b.WriteString("\n" + errorBox(w.formErr) + "\n")
+	}
+
+	b.WriteString("\n" + dimStyle.Render(
+		"※ 既定値のままであれば従来の固定仕様と同一の挙動。Target VMAF は harmonic_mean 基準") + "\n")
+	b.WriteString(strings.Join([]string{
+		keyHint("Tab/↑↓", "項目移動"),
+		keyHint("←→", "変更"),
+		keyHint("Enter", "最適化開始"),
+		keyHint("Esc", "終了"),
+	}, "  ") + "\n")
+	return b.String()
 }
