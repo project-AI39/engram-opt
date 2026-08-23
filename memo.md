@@ -488,6 +488,16 @@ Output       : [ 空=<入力>.opt.mkv                            ]
 - **評価ログの配置と保持**: VMAFレポートはjobDir配下の専用サブディレクトリに出す（%TEMP%禁止規約準拠）。掃除対象は自分が作ったサブディレクトリのみ（呼び出し側所有ディレクトリを消さない）。成功時のみ削除、失敗時は証拠として保持。モデルフォールバック時は警告ログ（スコアのモデル間非比較可能性の明示）。
 - **Evaluate契約の変更**: `QualityEvaluator.Evaluate(..., workDir)` に作業領域引数を追加。評価成果物はシーン作業領域に属するという所有権の明確化。
 
+### 改善ラウンド第5弾（2026-08-24 / registerRun分割・precheck回帰恒久化）
+
+* cli/run.go 分割: RunEクロージャ182行を解消し、registerRun=フラグ配線のみ、
+  runOptimize=実行フロー本体へ分離（2902afb）。挙動不変・staticcheckクリーン。
+  教訓: PowerShell経由の大型文字列置換はCRLFと衝突して破壊的になり得るため、
+  構造変更はEditツール＋git復元前提で行う（本ラウンドで1度復元してやり直した）。
+* precheck統合回帰テスト新設（precheck_integration_test.go）:
+  * 単一フレーム入力 → exit非0かつ "too short" 文言
+  * 偽装ファイル → "ffprobe (dims)" + 診断tail（Invalid data/moov atom）
+* README記載コマンド例2件を実--helpと照合し全フラグ整合を確認。
 ### 改善ラウンド第4弾（2026-08-24 / 静的解析・診断性残枠・ファズ拡充）
 
 * staticcheck@latest 導入監査 → 6件検出し全て解消:
