@@ -418,7 +418,7 @@ type QualityEvaluator interface {
   かつて裸起動のみバイパス経路（`bareRunE`）だったため、`--headless` 裸起動が
   ウィザードを開く・排他チェックが効かない漏れがあった（2026-08 レビューで発見・統合済み）。
   bare+TTY=ウィザード、bare+非TTY=ヘルプ（`launchHelp`）、bare+`--headless`=エラー。
-  フラグ値（--codec/--preset/--out 等）はウィザード初期値としても反映される
+  フラグ値（--codec/--preset/--out 等）はウィザード初期値としても反映される。ただしウィザード単独起動（--codec未指定）の初期選択CodecはAV1（2026-08変更。CLI/ヘッドレスのフラグ既定h264は不変）
 
 ### ダブルクリック起動の確定実装（cobra mousetrap無効化）
 

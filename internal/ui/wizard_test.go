@@ -38,6 +38,21 @@ func keyRunes(s string) tea.KeyMsg {
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 }
 
+// ウィザードの初期選択CodecはAV1（CLIフラグ未指定時のフォールバック既定）。
+// PresetリストもAV1用へ再構築され、svtav1既定のspeed 6が選ばれている。
+func TestNewWizardFormDefaultsToAV1(t *testing.T) {
+	w := newWizardForm(Options{})
+	if got := codecChoices[w.codecIdx]; got != domain.CodecAV1 {
+		t.Fatalf("default wizard codec = %s, want av1", got)
+	}
+	if w.presetList[0] != "1" || len(w.presetList) != 13 {
+		t.Fatalf("av1 preset list = %v, want numeric 1..13", w.presetList)
+	}
+	if got := w.preset(); got != "6" {
+		t.Fatalf("default av1 preset = %q, want \"6\"", got)
+	}
+}
+
 // Codecの←→は実値リストを循環する。
 func TestWizardCodecCycling(t *testing.T) {
 	m := testWizardModel(t)

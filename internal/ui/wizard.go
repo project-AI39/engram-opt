@@ -211,6 +211,16 @@ func newWizardForm(opts Options) wizardForm {
 			break
 		}
 	}
+	// Options.Codecが空（=CLIフラグ未指定でウィザード単独起動）のときはAV1を既定選択とする。
+	// 実値指定があれば上のループが上書きするため、ここでの代入はフォールバックとして機能する。
+	if opts.Codec == "" {
+		for i, c := range codecChoices {
+			if c == domain.CodecAV1 {
+				w.codecIdx = i
+				break
+			}
+		}
+	}
 	for i, a := range audioChoices {
 		if a == domain.AudioMode(opts.Audio) {
 			w.audioIdx = i // ラベル（libopus併記）ではなく値で同定する

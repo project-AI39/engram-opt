@@ -138,8 +138,13 @@ func registerRun(root *cobra.Command) {
 
 		switch mode {
 		case launchWizard:
-			// ウィザード（裸起動＋端末）。フラグ値は各項目の初期値として反映される
-			return launchWizardMode(ctx, input, output, cfg, audioMode, logSink)
+			// ウィザード（裸起動＋端末）。フラグ値は各項目の初期値として反映される。
+			// ただし--codec未指定時はウィザード側の既定（AV1）に委ねるため空を渡す。
+			seed := cfg
+			if !cmd.Flags().Changed("codec") {
+				seed.Codec = ""
+			}
+			return launchWizardMode(ctx, input, output, seed, audioMode, logSink)
 
 		case launchTUI:
 			outPath := defaultOutputPathIfEmpty(output, input)
