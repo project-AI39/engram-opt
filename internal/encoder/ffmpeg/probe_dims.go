@@ -1,6 +1,7 @@
 package ffmpeg
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
@@ -10,19 +11,34 @@ import (
 	"engram-opt/internal/toolbin"
 )
 
+// runFFProbe は ffprobe を実行し stdout を返す。失敗時はstderr末尾を添えて
+// 原因を即座に判明させる（偽装ファイル・未対応codec等の診断に必要）。
+// 成功時のstderrは無視する（警告が混入してもstdout解析を汚さないため分離取得）。
+func runFFProbe(ctx context.Context, label string, args ...string) ([]byte, error) {
+	ffprobePath, err := toolbin.Resolve("ffprobe")
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.CommandContext(ctx, ffprobePath, args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("ffprobe (%s) failed: %w\n%s", label, err, toolbin.Tail(stderr.String(), 5))
+	}
+	return out, nil
+}
+
 // ProbeVideoDims は映像ストリームの解像度を返す。
 // --out-res 未指定時に「入力動画と同じ解像度」を具体値へ解決するために使う。
 func ProbeVideoDims(ctx context.Context, inputPath string) (width, height int, err error) {
-	ffprobePath, err := toolbin.Resolve("ffprobe")
-	if err != nil {
-		return 0, 0, err
-	}
-	out, err := exec.CommandContext(ctx, ffprobePath,
+
+	out, err := runFFProbe(ctx, "dims",
 		"-v", "error", "-select_streams", "v:0",
 		"-show_entries", "stream=width,height",
-		"-of", "csv=p=0", inputPath).Output()
+		"-of", "csv=p=0", inputPath)
 	if err != nil {
-		return 0, 0, fmt.Errorf("ffprobe (dims) failed: %w", err)
+		return 0, 0, err
 	}
 	parts := strings.Split(strings.TrimSpace(string(out)), ",")
 	if len(parts) < 2 {
@@ -42,13 +58,10 @@ func ProbeVideoDims(ctx context.Context, inputPath string) (width, height int, e
 // エレメンタリストリーム等 duration を持たない入力では ok=false を返す
 // （メタデータ欠落は入力の不正ではないため、呼び出し側はチェックをスキップする）。
 func ProbeDurationSeconds(ctx context.Context, inputPath string) (seconds float64, ok bool) {
-	ffprobePath, err := toolbin.Resolve("ffprobe")
-	if err != nil {
-		return 0, false
-	}
-	out, err := exec.CommandContext(ctx, ffprobePath,
+
+	out, err := runFFProbe(ctx, "duration",
 		"-v", "error", "-show_entries", "format=duration",
-		"-of", "csv=p=0", inputPath).Output()
+		"-of", "csv=p=0", inputPath)
 	if err != nil {
 		return 0, false
 	}
@@ -63,13 +76,10 @@ func ProbeDurationSeconds(ctx context.Context, inputPath string) (seconds float6
 // 対象: 複数音声トラック（先頭1本のみ使用）と字幕ストリーム（出力に含めない）。
 // 情報提供が目的のため、取得失敗時は空スライスを返す（後段の正式なprobeがエラーを出す）。
 func ProbeStreamNotes(ctx context.Context, inputPath string) []string {
-	ffprobePath, err := toolbin.Resolve("ffprobe")
-	if err != nil {
-		return nil
-	}
-	out, err := exec.CommandContext(ctx, ffprobePath,
+
+	out, err := runFFProbe(ctx, "streams",
 		"-v", "error", "-show_entries", "stream=codec_type",
-		"-of", "csv=p=0", inputPath).Output()
+		"-of", "csv=p=0", inputPath)
 	if err != nil {
 		return nil
 	}

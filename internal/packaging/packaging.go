@@ -83,17 +83,7 @@ func Run(root string, opt Options) (string, error) {
 	if err := toolbin.CopyFile(filepath.Join(root, "LICENSE"), filepath.Join(buildDir, "LICENSE")); err != nil {
 		return "", fmt.Errorf("copying LICENSE: %w", err)
 	}
-	// tmp/ は実行時の一時領域であり前回実行の残骸（チャンク・中断ジョブ等）を含み得る。
-	// 配布Zipへの混入を防ぐため、ステージング時に必ず空から作り直す。
-	tmpDir := filepath.Join(buildDir, "tmp")
-	if err := os.RemoveAll(tmpDir); err != nil {
-		return "", fmt.Errorf("resetting staging tmp dir: %w", err)
-	}
-	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
-		return "", err
-	}
-	placeholder := []byte("This directory is recreated at runtime. Safe to delete.\n")
-	if err := os.WriteFile(filepath.Join(tmpDir, ".placeholder"), placeholder, 0o644); err != nil {
+	if err := resetStagingTmp(buildDir); err != nil {
 		return "", err
 	}
 	// README も配布物に同梱する（memo.md 配置図どおり README.txt として）
@@ -196,4 +186,22 @@ func zipDirectory(srcDir, dstZip string) (int, error) {
 		return 0, err
 	}
 	return count, zw.Close()
+}
+
+// resetStagingTmp はステージング領域の tmp/ を空から作り直し .placeholder を置く。
+// tmp/ は実行時の一時領域であり前回実行の残骸（チャンク・中断ジョブ・ユーザー出力）を
+// 含み得るため、配布Zipへの混入を防ぐ目的で毎回クリアする（バグハント第1ラウンドで実害確認）。
+func resetStagingTmp(buildDir string) error {
+	tmpDir := filepath.Join(buildDir, "tmp")
+	if err := os.RemoveAll(tmpDir); err != nil {
+		return fmt.Errorf("resetting staging tmp dir: %w", err)
+	}
+	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
+		return fmt.Errorf("creating staging tmp dir: %w", err)
+	}
+	placeholder := []byte("This directory is recreated at runtime. Safe to delete.\n")
+	if err := os.WriteFile(filepath.Join(tmpDir, ".placeholder"), placeholder, 0o644); err != nil {
+		return fmt.Errorf("writing tmp placeholder: %w", err)
+	}
+	return nil
 }

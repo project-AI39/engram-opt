@@ -226,9 +226,13 @@ engram-opt.exe long_video.mp4 --codec av1 --tui --log-file run.log
 |---|---|
 | `binary "ffmpeg" not found; run 'go run ./cmd/engram-setup' first` | 開発時: setupを実行。配布版: 本体と `bin/` の位置関係を確認（フォルダ構造維持） |
 | `output path ... must be outside the temp dir` | `--out` が tmp 配下。別の場所を指定する |
-| `unknown preset "..." for av1/libsvtav1` | AV1のpresetは名称または数値で指定する |
+| `invalid preset "..." for av1/libsvtav1` | AV1のpresetは**数値のみ**（例: 6）。x264流の名称は不可 |
 | `total frame count mismatch` / `frame count mismatch in evaluation` | 入力メタデータと実データの不一致（fail-fast設計）。入力ファイルを確認する |
-| 終了が遅い | 仕様。まず `--shot` で1シーン試すことを推奨 |
+| `input file not found` / `input is a directory` | 入力パスの指定ミス |
+| `input video is too short (...)` | 単一フレーム等の極短入力は対応外 |
+| `unsupported output extension ".xxx"` | 出力は `.mkv`(推奨)/`.mp4`/`.webm`/`.mov` のみ |
+| `output path is an existing directory` | 出力先にはファイル名まで指定する |
+| `--out and --log-file must differ` | 出力とログを同一パスにはできない || 終了が遅い | 仕様。まず `--shot` で1シーン試すことを推奨 |
 | 中断後に tmp が残った | 失敗時保持の仕様。解析後に手動削除 |
 
 ---

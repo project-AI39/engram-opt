@@ -239,3 +239,29 @@ func readAll(t *testing.T, path string) []byte {
 	}
 	return b
 }
+
+// resetStagingTmp は前回残骸を完全に消し、.placeholderだけの状態へ戻す。
+func TestResetStagingTmpClearsJunk(t *testing.T) {
+	buildDir := t.TempDir()
+	tmpDir := filepath.Join(buildDir, "tmp")
+	if err := os.MkdirAll(filepath.Join(tmpDir, "20260101-000000-p1"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	junk := filepath.Join(tmpDir, "user_output.mkv")
+	if err := os.WriteFile(junk, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := resetStagingTmp(buildDir); err != nil {
+		t.Fatalf("resetStagingTmp: %v", err)
+	}
+	if _, err := os.Stat(junk); !os.IsNotExist(err) {
+		t.Fatalf("junk must be removed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "20260101-000000-p1")); !os.IsNotExist(err) {
+		t.Fatalf("stale job dir must be removed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, ".placeholder")); err != nil {
+		t.Fatalf("placeholder must exist: %v", err)
+	}
+}
