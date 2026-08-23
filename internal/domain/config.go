@@ -43,7 +43,7 @@ type SearchConfig struct {
 	Metric      ScoreMetric // 合否判定に使うVMAF統計（既定harmonic_mean）
 
 	// Eval は評価プロファイル（アルゴリズム×評価解像度のセット）。
-	// ゼロ値は「未指定」扱いでhd1080へ正規化される。
+	// ゼロ値は「未指定」扱いで既定プロファイル（vmaf_v1.0.16_3d0h）へ正規化される。
 	Eval EvalProfile
 
 	// OutWidth / OutHeight は出力リサイズ先（0,0=ソース解像度維持）。
@@ -149,7 +149,7 @@ func (c SearchConfig) EffectiveBitDepth() int {
 	return c.BitDepth
 }
 
-// EffectiveEvalProfile は正規化後の評価プロファイルを返す（ゼロ値→hd1080）。
+// EffectiveEvalProfile は正規化後の評価プロファイルを返す（ゼロ値→vmaf_v1.0.16_3d0h）。
 // 未知のモデル名が入っていた場合もここでは弾かない——ResolveEvalProfileによる
 // 構築時検証（フェイルファスト）が前提。
 func (c SearchConfig) EffectiveEvalProfile() EvalProfile {

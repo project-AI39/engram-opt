@@ -21,7 +21,7 @@ func TestBuildEvalGraphNormalizesBothInputs(t *testing.T) {
 	}{
 		{domain.DefaultEvalProfile(), "scale=1920:1080", "vmaf_v1.0.16_3d0h", nil},
 		{
-			profile:   domain.EvalProfile{Name: "vmaf-uhd4k", Algorithm: "libvmaf", Model: "vmaf_4k_v0.6.1", Width: 3840, Height: 2160},
+			profile:   domain.EvalProfile{Name: "vmaf_4k_v0.6.1", Algorithm: "libvmaf", Model: "vmaf_4k_v0.6.1", Width: 3840, Height: 2160},
 			wantScale: "scale=3840:2160",
 			wantModel: "vmaf_4k_v0.6.1",
 		},

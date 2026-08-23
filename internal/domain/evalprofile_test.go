@@ -9,10 +9,10 @@ import (
 func TestResolveEvalProfile(t *testing.T) {
 	p, err := ResolveEvalProfile("vmaf_4k_v0.6.1")
 	if err != nil {
-		t.Fatalf("uhd4k should resolve: %v", err)
+		t.Fatalf("4k profile should resolve: %v", err)
 	}
 	if p.Model != "vmaf_4k_v0.6.1" || p.Width != 3840 || p.Height != 2160 {
-		t.Fatalf("uhd4k = %+v", p)
+		t.Fatalf("4k profile = %+v", p)
 	}
 	if _, err := ResolveEvalProfile("nope"); err == nil {
 		t.Fatal("unknown profile must be rejected")

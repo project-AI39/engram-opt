@@ -454,7 +454,7 @@ func TestWizardEvalAlgorithmAndResolutionSelection(t *testing.T) {
 		t.Fatalf("initial resolution = %s, want vmaf_v1.0.16_3d0h", got)
 	}
 
-	// 解像度の循環: hd1080 -> uhd4k -> (wrap) hd1080
+	// 解像度の循環: vmaf_v1.0.16_3d0h -> vmaf_4k_v0.6.1 -> (wrap) vmaf_v1.0.16_3d0h
 	m.wiz.focus = fEvalRes
 	m, _ = step(t, m, keyRight())
 	if got := m.wiz.evalProfile().Name; got != "vmaf_4k_v0.6.1" {
