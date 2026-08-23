@@ -90,6 +90,11 @@ func (e *Encoder) EncodeChunk(ctx context.Context, inputPath string, scene domai
 	default:
 		return fmt.Errorf("unsupported codec: %q", params.Codec)
 	}
+	// ユーザー指定の追加オプションはコーデック別ブロックの後に挿入する。
+	// ffmpegは同名出力オプションの最後の指定を優先するが、管理対象オプション
+	// （-crf/-preset等）は domain.ParseExtraArgs で拒否済みのため契約は壊れない。
+	// -an と出力パスは必ずその後ろに置き、ストリーム構成を固定する。
+	args = append(args, params.ExtraArgs...)
 	args = append(args, "-an", outputPath)
 
 	cmd := exec.CommandContext(ctx, ffmpegPath, args...)

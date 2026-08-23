@@ -79,6 +79,7 @@ const (
 	fMetric
 	fDepth
 	fAudio
+	fEncArgs
 	fEvalAlg // 評価アルゴリズム（libvmaf / 将来拡張）
 	fEvalRes // 評価解像度（選択中アルゴリズムが対応するもののみ循環）
 	fOutRes
@@ -97,12 +98,13 @@ var metricChoices = []domain.ScoreMetric{
 type wizardForm struct {
 	focus int
 
-	input  textinput.Model
-	output textinput.Model
-	minCRF textinput.Model
-	maxCRF textinput.Model
-	target textinput.Model
-	outRes textinput.Model
+	input   textinput.Model
+	output  textinput.Model
+	minCRF  textinput.Model
+	maxCRF  textinput.Model
+	target  textinput.Model
+	outRes  textinput.Model
+	encArgs textinput.Model
 
 	codecIdx   int
 	presetList []string // 現在のコーデックに応じた実値リスト（切替時に再構築）
@@ -157,8 +159,17 @@ func newWizardForm(opts Options) wizardForm {
 		outRes.SetValue(opts.OutRes)
 	}
 
+	encArgs := textinput.New()
+	encArgs.Placeholder = "追加エンコード引数（例: -tune film）※-crf等は管理対象のため指定不可"
+	encArgs.Prompt = ""
+	encArgs.CharLimit = 200
+	if opts.ExtraArgsText != "" {
+		// --enc-args フラグ値を初期値へ（フラグ段階でParseExtraArgs検証済みの文字列）
+		encArgs.SetValue(opts.ExtraArgsText)
+	}
+
 	// テキスト入力の見た目（値=明色 / プレースホルダ=薄色）
-	for _, t := range []*textinput.Model{&in, &out, &outRes} {
+	for _, t := range []*textinput.Model{&in, &out, &outRes, &encArgs} {
 		t.TextStyle = valueStyle
 		t.PlaceholderStyle = dimStyle
 	}
@@ -188,6 +199,7 @@ func newWizardForm(opts Options) wizardForm {
 		evalAlgIdx: indexOf(domain.EvalAlgorithmIDs(), domain.DefaultEvalAlgorithm),
 		evalResIdx: initialEvalResIdx(opts.EvalProfileName),
 		outRes:     outRes,
+		encArgs:    encArgs,
 	}
 	for _, t := range []*textinput.Model{&w.minCRF, &w.maxCRF, &w.target} {
 		t.TextStyle = valueStyle
@@ -335,6 +347,8 @@ func (m Model) handleSetupKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		w.output, c = w.output.Update(msg)
 	case fOutRes:
 		w.outRes, c = w.outRes.Update(msg)
+	case fEncArgs:
+		w.encArgs, c = w.encArgs.Update(msg)
 	case fMinCRF:
 		w.minCRF, c = w.minCRF.Update(msg)
 	case fMaxCRF:
@@ -385,6 +399,8 @@ func (m Model) stepField(dir int) (Model, tea.Cmd) {
 			w.input, c = w.input.Update(tea.KeyMsg{Type: kt})
 		case fOutRes:
 			w.outRes, c = w.outRes.Update(tea.KeyMsg{Type: kt})
+		case fEncArgs:
+			w.encArgs, c = w.encArgs.Update(tea.KeyMsg{Type: kt})
 		default: // fOutput
 			w.output, c = w.output.Update(tea.KeyMsg{Type: kt})
 		}
@@ -398,6 +414,7 @@ func (m *Model) syncFocus() {
 	m.wiz.input.Blur()
 	m.wiz.output.Blur()
 	m.wiz.outRes.Blur()
+	m.wiz.encArgs.Blur()
 	m.wiz.minCRF.Blur()
 	m.wiz.maxCRF.Blur()
 	m.wiz.target.Blur()
@@ -408,6 +425,8 @@ func (m *Model) syncFocus() {
 		m.wiz.output.Focus()
 	case fOutRes:
 		m.wiz.outRes.Focus()
+	case fEncArgs:
+		m.wiz.encArgs.Focus()
 	case fMinCRF:
 		m.wiz.minCRF.Focus()
 	case fMaxCRF:
@@ -487,6 +506,11 @@ func (w *wizardForm) buildConfig() (domain.SearchConfig, error) {
 		return domain.SearchConfig{}, fmt.Errorf("Out Res: %w", oerr)
 	}
 	cfg.OutWidth, cfg.OutHeight = outW, outH
+	extraArgs, aerr := domain.ParseExtraArgs(w.encArgs.Value())
+	if aerr != nil {
+		return domain.SearchConfig{}, fmt.Errorf("Extra Args: %w", aerr)
+	}
+	cfg.ExtraArgs = extraArgs
 	if err := cfg.Validate(); err != nil {
 		return domain.SearchConfig{}, err
 	}
@@ -577,6 +601,7 @@ func renderSetup(m Model) string {
 		row("Bit Depth:", w.focus == fDepth,
 			selectValue(fmt.Sprintf("%d (%s)", d, depthLabels[d]), w.focus == fDepth)),
 		row("Audio:", w.focus == fAudio, selectValue(audioLabels()[w.audioIdx], w.focus == fAudio)),
+		row("Extra Args:", w.focus == fEncArgs, w.encArgs.View()),
 		"", sectionCaption("evaluation"),
 		row("Eval Algorithm:", w.focus == fEvalAlg,
 			selectValue(w.evalAlgorithmID(), w.focus == fEvalAlg)),

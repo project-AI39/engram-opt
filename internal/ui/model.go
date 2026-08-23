@@ -106,9 +106,10 @@ type Options struct {
 	// Metric は合否基準指標の表示用（空はharmonic扱い）。
 	Metric string
 
-	// EvalProfileName / OutRes はウィザード初期値用（フラグ由来。空は既定）。
+	// EvalProfileName / OutRes / ExtraArgsText はウィザード初期値用（フラグ由来。空は既定）。
 	EvalProfileName string
 	OutRes          string
+	ExtraArgsText   string
 
 	// Audio は音声モード表示用（空なら表示しない）。
 	Audio string

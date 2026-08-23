@@ -37,7 +37,7 @@ func TestEnsureOutside(t *testing.T) {
 
 // memo.md 固定仕様との照合: 探索範囲は15〜36、目標スコア95.0。
 func TestBuildSearchConfigDefaultsMatchSpec(t *testing.T) {
-	cfg, err := buildSearchConfig("h264", "medium", "", "", 0, 0)
+	cfg, err := buildSearchConfig("h264", "medium", "", "", 0, 0, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestBuildSearchConfigDefaultsMatchSpec(t *testing.T) {
 }
 
 func TestBuildSearchConfigRejectsUnknownCodec(t *testing.T) {
-	if _, err := buildSearchConfig("vp9", "medium", "", "", 0, 0); err == nil {
+	if _, err := buildSearchConfig("vp9", "medium", "", "", 0, 0, ""); err == nil {
 		t.Fatal("unsupported codec must be rejected at CLI layer")
 	}
 }

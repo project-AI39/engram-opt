@@ -47,6 +47,7 @@ func registerRun(root *cobra.Command) {
 		audio    string
 		evalProf string
 		outRes   string
+		encArgs  string
 		tui      bool
 		headless bool
 		logFile  string
@@ -118,7 +119,7 @@ func registerRun(root *cobra.Command) {
 			log.Printf("[optimize] --out-res empty: following input resolution %dx%d", outW, outH)
 		}
 
-		cfg, err := buildSearchConfig(codec, preset, metric, evalProf, outW, outH)
+		cfg, err := buildSearchConfig(codec, preset, metric, evalProf, outW, outH, encArgs)
 		if err != nil {
 			return err
 		}
@@ -187,6 +188,7 @@ func registerRun(root *cobra.Command) {
 	f.StringVar(&logFile, "log-file", "", "append log output to this file (for unattended runs)")
 	f.StringVar(&evalProf, "eval-profile", domain.DefaultEvalProfileName, "evaluation algorithm+resolution set: hd1080 | uhd4k")
 	f.StringVar(&outRes, "out-res", "", "output resolution in px (e.g. 1920x1080). empty = same as input video")
+	f.StringVar(&encArgs, "enc-args", "", `extra ffmpeg output options for encode trials (e.g. "-tune film"). managed options like -crf are rejected`)
 }
 
 // ===== 起動モード判定（memo.md「TUIウィザード化」） =====
@@ -324,7 +326,7 @@ func trialLogger(cfg domain.SearchConfig) engine.Observer {
 
 // buildSearchConfig はCLIフラグ値から探索設定を構築する。
 // metricName は "harmonic" | "mean" | "min"（空は既定harmonic）。
-func buildSearchConfig(codecName, preset, metricName, evalProfileName string, outW, outH int) (domain.SearchConfig, error) {
+func buildSearchConfig(codecName, preset, metricName, evalProfileName string, outW, outH int, encArgsText string) (domain.SearchConfig, error) {
 	// コーデックは短名とffmpegエンコーダ実名（libx264等）の両方を受ける
 	c, cerr := domain.ResolveVideoCodec(codecName)
 	if cerr != nil {
@@ -346,6 +348,10 @@ func buildSearchConfig(codecName, preset, metricName, evalProfileName string, ou
 		}
 		evalProfile = p
 	}
+	extraArgs, aerr := domain.ParseExtraArgs(encArgsText)
+	if aerr != nil {
+		return domain.SearchConfig{}, aerr
+	}
 	cfg := domain.SearchConfig{
 		Codec:       c,
 		MinCRF:      domain.DefaultMinCRF,
@@ -355,6 +361,7 @@ func buildSearchConfig(codecName, preset, metricName, evalProfileName string, ou
 		BitDepth:    domain.DefaultBitDepth,
 		Metric:      metric,
 		Eval:        evalProfile,
+		ExtraArgs:   extraArgs,
 		OutWidth:    outW,
 		OutHeight:   outH,
 	}

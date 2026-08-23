@@ -73,6 +73,7 @@ func BisectScene(ctx context.Context, enc domain.VideoEncoder, ev domain.Quality
 			BitDepth:  paramsBitDepth,
 			OutWidth:  cfg.OutWidth,
 			OutHeight: cfg.OutHeight,
+			ExtraArgs: cfg.ExtraArgs,
 		}
 		if err := enc.EncodeChunk(ctx, inputPath, scene, params, out); err != nil {
 			_ = os.Remove(out) // 失敗試行の断片を掃除

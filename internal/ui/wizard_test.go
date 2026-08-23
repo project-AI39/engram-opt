@@ -332,8 +332,15 @@ func TestWizardConfirmInvokesFactoryAndTransitions(t *testing.T) {
 		Metric:      domain.MetricMean,
 		Eval:        domain.DefaultEvalProfile(),
 	}
-	if gotCfg != wantCfg || gotAudio != domain.AudioCopy {
-		t.Fatalf("factory cfg/audio = %+v / %s, want %+v / copy", gotCfg, gotAudio, wantCfg)
+	// ExtraArgs([]string)追加によりSearchConfigは比較不能になったため、フィールド毎に検証する
+	if gotCfg.Codec != wantCfg.Codec || gotCfg.MinCRF != wantCfg.MinCRF ||
+		gotCfg.MaxCRF != wantCfg.MaxCRF || gotCfg.TargetScore != wantCfg.TargetScore ||
+		gotCfg.Preset != wantCfg.Preset || gotCfg.BitDepth != wantCfg.BitDepth ||
+		gotCfg.Metric != wantCfg.Metric || len(gotCfg.ExtraArgs) != 0 {
+		t.Fatalf("factory cfg mismatch:\n got %+v\nwant %+v", gotCfg, wantCfg)
+	}
+	if gotAudio != domain.AudioCopy {
+		t.Fatalf("audio = %s, want copy", gotAudio)
 	}
 	if factoryCalls != 1 {
 		t.Fatalf("factory calls = %d", factoryCalls)

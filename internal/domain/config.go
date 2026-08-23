@@ -21,10 +21,14 @@ type EncodeParams struct {
 	Preset   string // 全試行で一律固定。codec別の実際の引数解決はencoder/ffmpeg内部で行う
 	BitDepth int    // 出力ビット深度: 10(yuv420p10le) / 8(yuv420p)。既定はSearchConfig.BitDepth
 
-	// OutWidth / OutHeight は出力リサイズ先（0=ソース解像度維持）。
+	// OutWidth / OutHeight は出力リセット先（0=ソース解像度維持）。
 	// シーン選択（フレーム番号）はリサイズに影響されないため、select後にscaleする。
 	OutWidth  int
 	OutHeight int
+
+	// ExtraArgs は各エンコード試行へ追加渡しするffmpeg出力オプション。
+	// 管理対象オプション（-crf等）はParseExtraArgsが拒否済みであること。
+	ExtraArgs []string
 }
 
 // SearchConfig CRF二分探索の全体設定。
@@ -44,6 +48,9 @@ type SearchConfig struct {
 	// OutWidth / OutHeight は出力リサイズ先（0,0=ソース解像度維持）。
 	OutWidth  int
 	OutHeight int
+
+	// ExtraArgs は全試行へ一律に追加するffmpeg出力オプション。
+	ExtraArgs []string
 }
 
 // 探索パラメータの既定値（memo.md「パラメータ一覧と露出方針」）。
@@ -118,6 +125,9 @@ func (c SearchConfig) Validate() error {
 		// 偶数解像度のみ許容
 	default:
 		return fmt.Errorf("invalid out resolution %dx%d (use even positive dimensions; leave unset to follow the input)", c.OutWidth, c.OutHeight)
+	}
+	if _, err := ParseExtraArgs(strings.Join(c.ExtraArgs, " ")); err != nil {
+		return err
 	}
 	return nil
 }

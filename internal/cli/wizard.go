@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 
 	"engram-opt/internal/domain"
 	"engram-opt/internal/engine"
@@ -39,6 +40,7 @@ func launchWizardMode(ctx context.Context, input, output string, cfg domain.Sear
 		Metric:          string(cfg.EffectiveMetric()),
 		EvalProfileName: cfg.Eval.Name,
 		OutRes:          outResText(cfg.OutWidth, cfg.OutHeight),
+		ExtraArgsText:   strings.Join(cfg.ExtraArgs, " "),
 		Audio:           string(audio),
 		LogMirror:       logSink,
 	}
