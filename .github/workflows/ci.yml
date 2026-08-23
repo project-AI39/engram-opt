@@ -3,15 +3,14 @@
 # windows-latest 上で実行する。製品ターゲットは windows/amd64 をpinしているため、
 # ジョブもWindowsランナー単独とする（Linux/macOS向けのクロス検証はスコープ外）。
 #
+# 実行は手動のみ（workflow_dispatch）。Actionsタブの「Run workflow」から起動する。
 # race検出は cgo(gcc) が必要なためローカルWindowsでは実施できない。
 # ランナーにはMinGW gccが同梱されているため、ここでのみ -race を走らせる。
 
 name: ci
 
 on:
-  push:
-    branches: [master]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   windows:

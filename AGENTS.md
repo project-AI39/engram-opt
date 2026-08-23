@@ -2,7 +2,7 @@
 
 ## 現状
 
-- **機能開発と改善フェーズはすべて完了**（2026-08-24時点）。Phase 1〜8（依存セットアップ自動化／シーン検出／CRF二分探索／VMAF評価／パイプライン統合／TUIダッシュボード＋ウィザード3ステージ〔setup→run→summary〕・起動モード自動判定・--headless／音声4モード／配布Zip化〔LICENSE・THIRD-PARTY-NOTICES全文埋め込み・決定論的Zip〕／`--version`＝Zip名同一バージョン／CI構築〔windows-latest Dev-CI Parity・race検出はCIのみ・初回pushで稼働〕／評価プロファイル制〔vmaf_v1.0.16_3d0h@1080p / vmaf_4k_v0.6.1@2160p・フォールバック廃止=フェイルファスト〕・--out-res/--enc-args／cobra mousetrap無効化によるダブルクリック→ウィザード直行・裸起動経路のdecideLaunch一本化・裸起動エラー時[Enter]待ち・フラグ値のウィザード初期値反映）まで実装完了・動作確認済み。
+- **機能開発と改善フェーズはすべて完了**（2026-08-24時点）。Phase 1〜8（依存セットアップ自動化／シーン検出／CRF二分探索／VMAF評価／パイプライン統合／TUIダッシュボード＋ウィザード3ステージ〔setup→run→summary〕・起動モード自動判定・--headless／音声4モード／配布Zip化〔LICENSE・THIRD-PARTY-NOTICES全文埋め込み・決定論的Zip〕／`--version`＝Zip名同一バージョン／CI構築〔windows-latest Dev-CI Parity・race検出はCIのみ・手動実行（workflow_dispatch）〕／評価プロファイル制〔vmaf_v1.0.16_3d0h@1080p / vmaf_4k_v0.6.1@2160p・フォールバック廃止=フェイルファスト〕・--out-res/--enc-args／cobra mousetrap無効化によるダブルクリック→ウィザード直行・裸起動経路のdecideLaunch一本化・裸起動エラー時[Enter]待ち・フラグ値のウィザード初期値反映）まで実装完了・動作確認済み。
 - 改善フェーズ実績: バグハント5ラウンド（不具合11件修正）・staticcheck全解消・ファズターゲット5個（約1150万実行違反ゼロ）・precheck層新設・registerRun分割等のリファクタ・コミット規約統一（gitmoji＋Conventional Commits・全92コミット書換済み。絵文字/type対応は `.vscode/settings.json` テンプレート）・ドキュメント整理（memo/README/AGENTS再編）。
 - **残作業はmemo.md「8. 将来課題とチェックリスト」のみ**（長時間100シーン超の無人完走・Ctrl+C中断耐性・BitDepth 8bit実TUI確認・TUI中ログ二重化の実機確認）。新機能は原則追加しない。動作仕様の固定点を変えるときは必ずmemo更新が先。
 - memo.md構成（2026-08-24再編）: §1現状／§2目的／§3アーキテクチャ／**§4固定仕様**／§5外部ツール実測知見／§6堅牢化ポリシー／§7実測サマリー／§8将来課題とチェックリスト／§9履歴概要。開発ログ・実行記録の詳細はgitログ参照（memoからは結論のみ残し削除済み）。

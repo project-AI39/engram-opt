@@ -7,7 +7,7 @@
 
 Phase 1〜8の機能開発と改善フェーズが**すべて完了**（動作確認済み）。
 
-- 実装済み: 依存セットアップ自動化／シーン検出／CRF二分探索／VMAF評価／パイプライン統合／TUIダッシュボード＋ウィザード／音声4モード／配布Zip化／CI（`.github/workflows/ci.yml`: windows-latest Dev-CI Parity・race検出はCIのみ）
+- 実装済み: 依存セットアップ自動化／シーン検出／CRF二分探索／VMAF評価／パイプライン統合／TUIダッシュボード＋ウィザード／音声4モード／配布Zip化／CI（`.github/workflows/ci.yml`: windows-latest Dev-CI Parity・race検出はCIのみ・実行は手動workflow_dispatch）
 - 改善フェーズ実績: バグハント5ラウンド（不具合修正11件）・staticcheck全解消・ファズターゲット5個（約1150万実行で不変条件違反ゼロ）・precheck層新設・コミット規約統一（全92コミット書換）・ドキュメント整理
 - 残作業: 本書「8. 将来課題とチェックリスト」のみ
 
