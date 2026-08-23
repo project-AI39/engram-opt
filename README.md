@@ -12,7 +12,7 @@
 ```
 
 - **画質保証つきの圧縮**: 各シーンで実測VMAFが目標95.0以上であることを確認してから採用。「目標品質を満たした上での最小サイズ」だけを出す。
-- **10-bit出力固定**（`yuv420p10le`）: 入力が8-bitでもバンディングを防ぎサイズ削減。
+- **10-bit既定出力**（`yuv420p10le`）: 入力が8-bitでもバンディングを防ぎサイズ削減。ウィザードで8-bitも選択可。
 - **完全ポータブル**: Zip解凍だけで動作。ランタイム導入・PATH設定・ビルドは不要。
 - **無人運転向け**: `--log-file` 二重化、失敗時の一時領域自動保持、非TTY自動フォールバック。
 
@@ -96,7 +96,7 @@ setupの内容: FFmpeg 8.1.2 full build をGitHubリリースからダウンロ�
 |---|---|---|
 | h264 | libx264 | `ultrafast`〜`veryslow` の文字列 |
 | hevc | libx265 | 同上 |
-| av1 | libsvtav1 | 数値（1〜13。小さいほど高品質・低速）。x264流名称も可（内部対応: `medium`→6 等） |
+| av1 | libsvtav1 | 数値のみ（1〜13。小さいほど高品質・低速）。x264流名称は指定不可（エラー） |
 
 音声モードの詳細:
 
@@ -127,7 +127,7 @@ setupの内容: FFmpeg 8.1.2 full build をGitHubリリースからダウンロ�
 | 評価プロファイル | `vmaf_v1.0.16_3d0h`（3d0hモデル@1920x1080・既定）/ `vmaf_4k_v0.6.1`（4Kモデル@3840x2160）。評価失敗時のフォールバックなし（即エラー） |
 | ウィザード既定Codec | AV1（`--codec`指定時はその値を初期選択。CLI/ヘッドレスの既定はh264のまま） |
 | ピクセル形式 | 既定10-bit `yuv420p10le`（8-bit `yuv420p` も選択可） |
-| GOP | GOP長＝シーン長。IDRはチャンク先頭フレームのみ |
+| GOP | GOP長＝シーン長。チャンク先頭は必ずIDR（以降のキーフレーム配置はエンコーダー判断に委ねる） |
 | 音声 | 最終ミックス方式（上表参照）。既定copyは無劣化 |
 | 処理方式 | シーン逐次。各試行は区間をフレーム単位で正確に抽出（高速化より正確性優先） |
 
@@ -232,7 +232,8 @@ engram-opt.exe long_video.mp4 --codec av1 --tui --log-file run.log
 | `input video is too short (...)` | 単一フレーム等の極短入力は対応外 |
 | `unsupported output extension ".xxx"` | 出力は `.mkv`(推奨)/`.mp4`/`.webm`/`.mov` のみ |
 | `output path is an existing directory` | 出力先にはファイル名まで指定する |
-| `--out and --log-file must differ` | 出力とログを同一パスにはできない || 終了が遅い | 仕様。まず `--shot` で1シーン試すことを推奨 |
+| `--out and --log-file must differ` | 出力とログを同一パスにはできない |
+| 終了が遅い | 仕様。まず `--shot` で1シーン試すことを推奨 |
 | 中断後に tmp が残った | 失敗時保持の仕様。解析後に手動削除 |
 
 ---
@@ -273,16 +274,16 @@ go test ./internal/... ./test/...           # フル検証（約1〜2分。事�
 ```text
 cmd/engram-opt/           ランタイム本体のmain（薄いラッパのみ・配布対象）
 cmd/engram-setup/         開発者向けセットアップmain（配布物には含めない）
-internal/cli/         cobraコマンド定義
-internal/setup/       依存関係の自動セットアップ（engram-setupから利用）
-internal/domain/      共通型・インターフェース（Scene/Metrics/Config）
-internal/detector/    シーン検出（av-scenechange）
-internal/encoder/     チャンクエンコード＋無劣化結合（ffmpeg）
-internal/evaluator/   VMAF評価（libvmaf）
-internal/engine/      CRF二分探索＋パイプライン司令塔
-internal/ui/          bubbletea製ダッシュボード
-internal/toolbin/     レイアウト検出・外部バイナリ解決
-test/e2e/             パイプライン全走査テスト
+internal/cli/             cobraコマンド定義
+internal/setup/           依存関係の自動セットアップ（engram-setupから利用）
+internal/domain/          共通型・インターフェース（Scene/Metrics/Config）
+internal/detector/        シーン検出（av-scenechange）
+internal/encoder/         チャンクエンコード＋無劣化結合（ffmpeg）
+internal/evaluator/       VMAF評価（libvmaf）
+internal/engine/          CRF二分探索＋パイプライン司令塔
+internal/ui/              bubbletea製ダッシュボード
+internal/toolbin/         レイアウト検出・外部バイナリ解決
+test/e2e/                 パイプライン全走査テスト
 ```
 
 ---
