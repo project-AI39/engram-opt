@@ -491,7 +491,7 @@ Output       : [ 空=<入力>.opt.mkv                            ]
 ### 改善ラウンド第5弾（2026-08-24 / registerRun分割・precheck回帰恒久化）
 
 * cli/run.go 分割: RunEクロージャ182行を解消し、registerRun=フラグ配線のみ、
-  runOptimize=実行フロー本体へ分離（2902afb）。挙動不変・staticcheckクリーン。
+  runOptimize=実行フロー本体へ分離（735bc92）。挙動不変・staticcheckクリーン。
   教訓: PowerShell経由の大型文字列置換はCRLFと衝突して破壊的になり得るため、
   構造変更はEditツール＋git復元前提で行う（本ラウンドで1度復元してやり直した）。
 * precheck統合回帰テスト新設（precheck_integration_test.go）:
@@ -517,11 +517,11 @@ Output       : [ 空=<入力>.opt.mkv                            ]
 
 * 発見・修正:
   * duration不明入力（エレメンタリストリーム .h264 等）が第1ラウンドで新設した
-    duration事前チェックに誤拒否される → 既知性フラグ方式へ変更（4acd825）。
+    duration事前チェックに誤拒否される → 既知性フラグ方式へ変更（33fff2e）。
     「メタデータ欠落＝不正」ではないため不明は後段へ委ねる。
   * 出力先が既存ディレクトリの場合、最終rename段階まで進んでから失敗していた
-    → 起動時早期拒否へ（ce43ded）。ウィザード確定経路も同一関数で保護。
-  * ウィザードfactoryに入力存在チェックが無い → CLIと同一文言で追加（4acd825）。
+    → 起動時早期拒否へ（8ec5c9b）。ウィザード確定経路も同一関数で保護。
+  * ウィザードfactoryに入力存在チェックが無い → CLIと同一文言で追加（33fff2e）。
 * 改善実装:
   * probe_dims 3プローブを runFFProbe 共通ランナーへ統合し、失敗時にstderr末尾を
     エラーへ添付。偽装/切り欠きファイルが「moov atom not found」と即判明する。
@@ -530,7 +530,7 @@ Output       : [ 空=<入力>.opt.mkv                            ]
 * テスト拡充: ProbeDurationSeconds / ProbeStreamNotes の統合テスト新設
   （通常コンテナ=既知値・生ES=unknown・複数音声/字幕の検出）。
 * リファクタリング: 大小文字同一視付きパス比較3実装（engine/cli）を
-  toolbin/fsutil SameAbsPath / IsWithin へ一元化（0a5e70d）。
+  toolbin/fsutil SameAbsPath / IsWithin へ一元化（5e92bba）。
 * 検証: hevc×audio4モード実機マトリクス完走。Bit Depth 8bitはウィザード専用のため
   CLI-E2E対象外と明記（pixFmtFor単体テストで担保）。
 ### バグハント第2ラウンド（2026-08-23 / ストリーム構成・ガード回避・並行実行）
@@ -547,7 +547,7 @@ out≡logfile同一パス。
   * 失敗時jobDirはデバッグ用に意図通り残存（72h sweepで回収）。成功時のみ破棄を確認。
   * AV1→.mp4出力: pin中ffmpeg 8.1.2では av01/av01 タグで正常格納できた
     （「mov muxerはAV1拒否」の旧メモは入力フィクスチャ生成時の話と判明）。
-* **改善候補 → 実装済み（3718efe・cli/precheck.go新設）**:
+* **改善候補 → 実装済み（0277dcf・cli/precheck.go新設）**:
   * 複数音声トラック/字幕の無言欠落 → 冒頭に `note:` ログで周知
     （ProbeStreamNotes。挙動自体は先頭1本ポリシーのまま、選択UIは将来課題）。
   * 単一フレーム入力 → duration事前チェックで「too short」を明示的に拒否。
@@ -562,15 +562,15 @@ out≡logfile同一パス。
 
 * **[修正済み] AV1へのx264流プリセット名がサイレント置換される**: svtPreset内の
   medium→6 等の対応表残存。--codec av1 --preset medium が暗黙変換で完走していた。
-  数値のみ透過・名前はエラーへ（ee6e386）。
+  数値のみ透過・名前はエラーへ（f252ae9）。
 * **[修正済み] 配布Zipにtmp残骸が混入**: packagingはbuild/tmpを掃除せず同梱しており、
   中断ジョブのチャンク群＋ユーザー出力まで実混入を確認。ステージング時に空から作り直す
-  よう修正（cc5db78）。Zip内tmpは.placeholderのみになったことを実機確認。
+  よう修正（9357ba4）。Zip内tmpは.placeholderのみになったことを実機確認。
 * **[修正済み] tmp直下への出力が許容される**: ensureOutsideはjobDir配下のみ判定。
   tmpRoot配下全体を拒否へ拡張（掃除対象かつZipステージング元のため）。
 * **[修正済み] 音声なし×opus/aac指定が映像のみへ黙って縮退**: 明示再圧縮要求は
   エラー化（--audio noneで音声なし意図を表明）。copyは従来どおり映像のみで妥当。
-* **[実装済み(3718efe)]** 存在しない/ディレクトリ入力は os.Stat 事前チェックで「not found / is a directory」と分離表示
+* **[実装済み(0277dcf)]** 存在しない/ディレクトリ入力は os.Stat 事前チェックで「not found / is a directory」と分離表示
   （os.Stat事前チェックで「ファイルが見つかりません」を分離すると親切）。
   出力先の深いディレクトリは自動作成される（orchestrator.go MkdirAll・文書化が薄い）。
 
@@ -669,7 +669,7 @@ E2E（6秒合成動画）を通過した後の、実運用前の最終確認チ�
   出力codecの圧縮率差によるもので品質優先設計としては正常
 - 追加修正なし。相対パス修正後、初回のフルマトリクスが通過
 
-### 第3回実行記録（2026-08-23 / 第2回フィクスチャの回帰再実行・f38a854）
+### 第3回実行記録（2026-08-23 / 第2回フィクスチャの回帰再実行・e45eea5）
 
 - 目的: TUI既定AV1化・フェイルファスト統一（Score契約panic化）・デッドコード除去後の
   決定論性確認。testdata/ の4入力を現行HEADバイナリで同一条件（既定codec/audio copy）で再実行
