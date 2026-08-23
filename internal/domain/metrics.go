@@ -20,13 +20,10 @@ const (
 )
 
 // ParseScoreMetric はCLI/ウィザードの文字列値を ScoreMetric へ変換する。未知名はエラー。
-// 旧表記 "harmonic"（libvmaf JSONキー導入前の略称）も後方互換で受ける。
 func ParseScoreMetric(s string) (ScoreMetric, error) {
 	switch m := ScoreMetric(s); m {
 	case MetricHarmonic, MetricMean, MetricMin:
 		return m, nil
-	case "harmonic":
-		return MetricHarmonic, nil
 	default:
 		return "", fmt.Errorf("invalid score metric %q (use harmonic_mean | mean | min)", s)
 	}

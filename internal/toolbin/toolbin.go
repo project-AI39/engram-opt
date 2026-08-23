@@ -41,7 +41,7 @@ func RepoRoot() (string, error) {
 	}
 }
 
-// Layout は本体と付帯リソース（bin/・tmp/）の所在を表す。
+// layout は本体と付帯リソース（bin/・tmp/）の所在を表す。
 //
 // 唯一の正式レイアウトは配布Zipと同一のステージング構造（memo.md「配置」）:
 //
@@ -50,12 +50,12 @@ func RepoRoot() (string, error) {
 //	<base>/tmp/            実行時一領域
 //
 // ソースツリーからの実行（go run / go test 等）では <repo>/build を base に寄せる。
-type Layout struct {
+type layout struct {
 	Base string // bin/ と tmp/ を格納するディレクトリ
 	Dev  bool   // 配布物ではなくソースツリーからの実行の場合 true
 }
 
-// DetectLayout は実行バイナリの所在からレイアウトを確定する。
+// detectLayout は実行バイナリの所在からレイアウトを確定する。
 //
 // 判定は配置済みレイアウトの定義そのものである「本体の隣に bin/ があるか」を
 // 直接確認する自己検証方式。OSの一時領域などの場所に基づく間接ヒューリスティックは
@@ -64,26 +64,26 @@ type Layout struct {
 //   - ローカルで go build -o build/engram-opt.exe しても bin/ が隣にあるため配布扱い
 //     （開発・配布で同一のコードパスを通る）
 //   - ユーザーがZipをどのパスへ解凍しても正しく動作する
-func DetectLayout() (Layout, error) {
+func detectLayout() (layout, error) {
 	exe, err := os.Executable()
 	if err != nil {
-		return Layout{}, fmt.Errorf("resolving executable: %w", err)
+		return layout{}, fmt.Errorf("resolving executable: %w", err)
 	}
 	return detectLayoutFor(exe)
 }
 
-func detectLayoutFor(exePath string) (Layout, error) {
+func detectLayoutFor(exePath string) (layout, error) {
 	base := filepath.Dir(exePath)
 	if FileExists(filepath.Join(base, "bin", ToolName("ffmpeg"))) {
-		return Layout{Base: base}, nil
+		return layout{Base: base}, nil
 	}
 	root, rerr := RepoRoot()
 	if rerr != nil {
-		return Layout{}, fmt.Errorf(
+		return layout{}, fmt.Errorf(
 			"no bundled tools next to %s and no repository root detected from the working directory; run 'go run ./cmd/engram-setup' first (keep the distributed folder layout intact)",
 			filepath.Base(exePath))
 	}
-	return Layout{Base: filepath.Join(root, "build"), Dev: true}, nil
+	return layout{Base: filepath.Join(root, "build"), Dev: true}, nil
 }
 
 // Resolve は同梱外部バイナリのパスを解決する。

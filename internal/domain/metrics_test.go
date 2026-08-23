@@ -39,7 +39,7 @@ func TestQualityMetricsScore(t *testing.T) {
 
 // ParseScoreMetric は実値3種のみを受け付ける。
 func TestParseScoreMetric(t *testing.T) {
-	for _, s := range []string{"harmonic_mean", "mean", "min", "harmonic"} { // harmonicは旧表記エイリアス
+	for _, s := range []string{"harmonic_mean", "mean", "min"} {
 		if _, err := ParseScoreMetric(s); err != nil {
 			t.Fatalf("%q should parse: %v", s, err)
 		}

@@ -13,9 +13,9 @@ import (
 	"engram-opt/internal/toolbin"
 )
 
-// AudioStream は元動画の先頭音声ストリームの要約。
+// audioStream は元動画の先頭音声ストリームの要約。
 // Channels == 0 は音声ストリームが存在しないことを意味する。
-type AudioStream struct {
+type audioStream struct {
 	Channels int
 }
 
@@ -90,13 +90,13 @@ func (e *Encoder) MuxAudio(ctx context.Context, videoPath string, originalPath s
 
 // probeFirstAudioStream は元動画の先頭音声ストリームのチャンネル数を取得する。
 // ストリームが無い場合は Channels==0 を返す（エラーにしない）。
-func probeFirstAudioStream(ctx context.Context, ffprobePath, inputPath string) (AudioStream, error) {
+func probeFirstAudioStream(ctx context.Context, ffprobePath, inputPath string) (audioStream, error) {
 	out, err := exec.CommandContext(ctx, ffprobePath,
 		"-v", "error", "-select_streams", "a:0",
 		"-show_entries", "stream=channels",
 		"-of", "json", inputPath).CombinedOutput()
 	if err != nil {
-		return AudioStream{}, fmt.Errorf("probing audio stream: %w\n%s", err, toolbin.Tail(string(out), 20))
+		return audioStream{}, fmt.Errorf("probing audio stream: %w\n%s", err, toolbin.Tail(string(out), 20))
 	}
 	var parsed struct {
 		Streams []struct {
@@ -104,10 +104,10 @@ func probeFirstAudioStream(ctx context.Context, ffprobePath, inputPath string) (
 		} `json:"streams"`
 	}
 	if uerr := json.Unmarshal(out, &parsed); uerr != nil {
-		return AudioStream{}, fmt.Errorf("parsing audio probe output: %w", uerr)
+		return audioStream{}, fmt.Errorf("parsing audio probe output: %w", uerr)
 	}
 	if len(parsed.Streams) == 0 {
-		return AudioStream{}, nil
+		return audioStream{}, nil
 	}
-	return AudioStream{Channels: parsed.Streams[0].Channels}, nil
+	return audioStream{Channels: parsed.Streams[0].Channels}, nil
 }

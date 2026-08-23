@@ -91,17 +91,6 @@ func ResolveEvalProfile(name string) (EvalProfile, error) {
 	return EvalProfile{}, fmt.Errorf("unknown eval profile %q (valid: %s)", name, strings.Join(names, ", "))
 }
 
-// EvalProfileNames は全プロファイルIDの一覧（CLIヘルプ等の表示順）。
-func EvalProfileNames() []string {
-	var names []string
-	for _, a := range evalAlgorithms {
-		for _, p := range a.Profiles {
-			names = append(names, p.Name)
-		}
-	}
-	return names
-}
-
 // Validate はプロファイルの完全性を検証する（評価直前の最終防衛線）。
 func (p EvalProfile) Validate() error {
 	if p.Model == "" {

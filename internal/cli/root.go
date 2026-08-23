@@ -26,12 +26,12 @@ func init() {
 	cobra.MousetrapHelpText = ""
 }
 
-// NewRootCmd は engram-opt コマンドのルートを構築する。
+// newRootCmd は engram-opt コマンドのルートを構築する。
 // 単一目的ツールのため実行本体はサブコマンド化せず、入力動画を位置引数で直接受ける:
 //
 //	engram-opt                 端末なら設定ウィザード / 非端末ならヘルプ
 //	engram-opt <input> [flags] 即実行
-func NewRootCmd() *cobra.Command {
+func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "engram-opt [input]",
 		Short: "Perceptual-quality driven video optimizer",
@@ -74,7 +74,7 @@ func ShouldPauseAfterError() bool {
 func Execute(version string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	root := NewRootCmd()
+	root := newRootCmd()
 	root.Version = version
 	// cobra既定の "engram-opt version X" 形式を1行へ短縮（スクリプトでの取得も容易に）
 	root.SetVersionTemplate("engram-opt {{.Version}}\n")
