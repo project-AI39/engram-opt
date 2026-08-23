@@ -2,7 +2,6 @@ package domain
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -112,31 +111,4 @@ func (p EvalProfile) Validate() error {
 		return fmt.Errorf("invalid evaluation resolution %dx%d", p.Width, p.Height)
 	}
 	return nil
-}
-
-// ParseOutRes は出力解像度指定をパースする。
-// 空文字列は「入力動画と同じ解像度」（実行時に入力の実寸へ解決される）を意味し、
-// それ以外は "<偶数>x<偶数>" の直接指定のみを受け付ける。
-// プリセット名や native といった語は使わない——ユーザーに常に実寸を意識させるため。
-func ParseOutRes(s string) (width, height int, err error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0, 0, nil
-	}
-	parts := strings.SplitN(strings.ToLower(s), "x", 2)
-	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf(`invalid --out-res %q: leave empty for input resolution, or use <even>x<even> (e.g. 1920x1080)`, s)
-	}
-	w, werr := strconv.Atoi(parts[0])
-	h, herr := strconv.Atoi(parts[1])
-	if werr != nil || herr != nil {
-		return 0, 0, fmt.Errorf("invalid --out-res %q: width/height must be integers", s)
-	}
-	if w <= 0 || h <= 0 {
-		return 0, 0, fmt.Errorf("invalid --out-res %q: dimensions must be positive", s)
-	}
-	if w%2 != 0 || h%2 != 0 {
-		return 0, 0, fmt.Errorf("invalid --out-res %q: dimensions must be even numbers (encoder requirement)", s)
-	}
-	return w, h, nil
 }

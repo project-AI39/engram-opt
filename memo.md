@@ -246,7 +246,8 @@ internal/
   ├── cli/                        # cobra コマンド定義（引数解析と委譲のみ）
   │    ├── root.go
   │    ├── setup.go               # setupサブコマンド定義（処理本体は internal/setup へ委譲）
-  │    └── run.go                 # 即実行系（RunE・decideLaunch・jobDir。旧optimize.go）
+  │    ├── run.go                 # 即実行系（RunE・decideLaunch・buildSearchConfig）
+  │    ├── jobdir.go              # ジョブ一時領域の生成・72h掃除
   ├── setup/                      # 依存関係セットアップ本体（FFmpeg DL・cargo build・検証）
   ├── domain/                     # 共通の型・インターフェース（依存の錨）
   │    ├── scene.go               # シーン境界情報
