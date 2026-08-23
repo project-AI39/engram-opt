@@ -52,158 +52,6 @@ func registerRun(root *cobra.Command) {
 	)
 
 	root.Args = cobra.MaximumNArgs(1)
-	root.RunE = func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		var input string
-		if len(args) > 0 {
-			input = args[0]
-		}
-		// 相対パス正規化（CLI境界）: --shot等のOrchestrator非経由パスや、
-		// cmd.Dirを変える子プロセスからも参照できるようにする。
-		// Orchestrator内にも同種の防御がある（多層防御）。
-		if input != "" {
-			if abs, err := filepath.Abs(input); err == nil {
-				input = abs
-			}
-		}
-		if output != "" {
-			if abs, err := filepath.Abs(output); err == nil {
-				output = abs
-			}
-		}
-
-		// 起動時事前チェック（探索コストを払う前に確定失敗を拒否する）
-		if input != "" {
-			if ierr := checkInputFile(input); ierr != nil {
-				return ierr
-			}
-			if oerr := checkOutputExt(output); oerr != nil {
-				return oerr
-			}
-			if aerr := checkDistinctArtifacts(input, output, logFile); aerr != nil {
-				return aerr
-			}
-		}
-
-		// --log-file: 無人実行向けにログをファイルへも二重化する
-		var logSink io.Writer // --tui 時は ui.Options.LogMirror に渡し、表示中も二重化を維持する
-		if logFile != "" {
-			f, lerr := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-			if lerr != nil {
-				return fmt.Errorf("opening log file: %w", lerr)
-			}
-			defer f.Close()
-			logSink = f
-			prev := log.Writer()
-			log.SetOutput(io.MultiWriter(prev, f))
-			defer log.SetOutput(prev)
-		}
-
-		mode, merr := decideLaunch(len(args) > 0, ui.IsTerminal(), tui, headless)
-		if merr != nil {
-			return merr
-		}
-		if mode == launchHelp {
-			// 非対話環境での裸起動（パイプ/CI/リダイレクト）。実行せずヘルプのみ表示する
-			return cmd.Help()
-		}
-
-		tmpRoot, terr := toolbin.TempRoot()
-		if terr != nil {
-			return terr
-		}
-		// 同一秒起動の別プロセスとjobDirを共有しないようPID接尾辞を付す
-		jobDir := newJobDir(tmpRoot)
-		sweepStaleJobs(tmpRoot)
-
-		outW, outH, oerr := domain.ParseOutRes(outRes)
-		if oerr != nil {
-			return oerr
-		}
-		if outW == 0 && input != "" {
-			// 未指定=入力動画と同じ解像度。実寸へ解決してログとウィザード初期値に使う
-			dw, dh, derr := ffenc.ProbeVideoDims(ctx, input)
-			if derr != nil {
-				return fmt.Errorf("resolving output resolution from input: %w", derr)
-			}
-			outW, outH = dw, dh
-			log.Printf("[optimize] --out-res empty: following input resolution %dx%d", outW, outH)
-		}
-		if input != "" {
-			// 単一フレーム等の極短入力はシーン検出器が処理できず内部エラーになるため、
-			// 探索開始前に分かりやすい形で拒否する。duration不明（エレメンタリ
-			// ストリーム等）は入力の不正ではないためスキップする
-			if dur, known := ffenc.ProbeDurationSeconds(ctx, input); known && dur < minInputDurationSeconds {
-				return fmt.Errorf("input video is too short (%.3fs): at least a few frames are required", dur)
-			}
-			// 黙って落とす可能性のある構成（複数音声・字幕）を早期に周知する
-			for _, note := range ffenc.ProbeStreamNotes(ctx, input) {
-				log.Printf("[optimize] note: %s", note)
-			}
-		}
-
-		cfg, err := buildSearchConfig(codec, preset, metric, evalProf, outW, outH, encArgs)
-		if err != nil {
-			return err
-		}
-		audioMode, aerr := domain.ParseAudioMode(audio)
-		if aerr != nil {
-			return aerr
-		}
-		log.Printf("[optimize] audio mode: %s", audioMode)
-
-		// デバッグモード: 単一シーンの二分探索のみ（結合しない）。フラグ専用でウィザード対象外。
-		if shot >= 0 {
-			if input == "" {
-				return fmt.Errorf("--shot requires an input video path")
-			}
-			return runShotDebug(ctx, input, shot, cfg, jobDir)
-		}
-
-		switch mode {
-		case launchWizard:
-			// ウィザード（裸起動＋端末）。フラグ値は各項目の初期値として反映される。
-			// ただし--codec未指定時はウィザード側の既定（AV1）に委ねるため空を渡す。
-			seed := cfg
-			if !cmd.Flags().Changed("codec") {
-				seed.Codec = ""
-			}
-			return launchWizardMode(ctx, input, output, seed, audioMode, logSink)
-
-		case launchTUI:
-			outPath := defaultOutputPathIfEmpty(output, input)
-			if err := validatePipelineTarget(jobDir, input, outPath); err != nil {
-				return err
-			}
-			rep, uerr := ui.Run(ctx, newOrchestrator(audioMode), input, outPath, jobDir, cfg, ui.Options{
-				InputPath:  input,
-				OutputPath: outPath,
-				Codec:      cfg.Codec,
-				Preset:     preset,
-				Target:     cfg.TargetScore,
-				Audio:      string(audioMode),
-				LogMirror:  logSink,
-			})
-			if uerr != nil {
-				return uerr
-			}
-			printSummary(input, rep)
-			return nil
-
-		default: // launchPlain
-			outPath := defaultOutputPathIfEmpty(output, input)
-			if err := validatePipelineTarget(jobDir, input, outPath); err != nil {
-				return err
-			}
-			report, perr := orchRun(ctx, input, outPath, jobDir, cfg, audioMode)
-			if perr != nil {
-				return perr
-			}
-			printSummary(input, report)
-			return nil
-		}
-	}
-
 	f := root.Flags()
 	f.StringVarP(&output, "out", "o", "", "final output path (default: <input>.opt.mkv)")
 	f.IntVar(&shot, "shot", -1, "debug: run CRF search on this scene index only")
@@ -217,6 +65,198 @@ func registerRun(root *cobra.Command) {
 	f.StringVar(&evalProf, "eval-profile", domain.DefaultEvalProfileName, "evaluation algorithm+resolution set: vmaf_v1.0.16_3d0h (3d0h@1080p) | vmaf_4k_v0.6.1 (4K@2160p)")
 	f.StringVar(&outRes, "out-res", "", "output resolution in px (e.g. 1920x1080). empty = same as input video")
 	f.StringVar(&encArgs, "enc-args", "", `extra ffmpeg output options for encode trials (e.g. "-tune film"). managed options like -crf are rejected`)
+	root.RunE = func(cmd *cobra.Command, args []string) error {
+		return runOptimize(cmd, args, runFlags{
+			output:   output,
+			shot:     shot,
+			codec:    codec,
+			preset:   preset,
+			metric:   metric,
+			audio:    audio,
+			evalProf: evalProf,
+			outRes:   outRes,
+			encArgs:  encArgs,
+			tui:      tui,
+			headless: headless,
+			logFile:  logFile,
+		})
+	}
+}
+
+// runFlags は registerRun が束ねたフラグ値の塊。runOptimize への受け渡し専用。
+type runFlags struct {
+	output   string
+	shot     int
+	codec    string
+	preset   string
+	metric   string
+	audio    string
+	evalProf string
+	outRes   string
+	encArgs  string
+	tui      bool
+	headless bool
+	logFile  string
+}
+
+// runOptimize は即実行系の本体。起動モード判定から各経路への委譲までを担う。
+// registerRun（フラグ定義・配線）と処理本体を分離して読み易さを保つ。
+func runOptimize(cmd *cobra.Command, args []string, f runFlags) error {
+	ctx := cmd.Context()
+
+	output, shot, codec := f.output, f.shot, f.codec
+	preset, metric, audio := f.preset, f.metric, f.audio
+	evalProf, outRes, encArgs := f.evalProf, f.outRes, f.encArgs
+	tui, headless, logFile := f.tui, f.headless, f.logFile
+
+	var input string
+	if len(args) > 0 {
+		input = args[0]
+	}
+	// 相対パス正規化（CLI境界）: --shot等のOrchestrator非経由パスや、
+	// cmd.Dirを変える子プロセスからも参照できるようにする。
+	// Orchestrator内にも同種の防御がある（多層防御）。
+	if input != "" {
+		if abs, err := filepath.Abs(input); err == nil {
+			input = abs
+		}
+	}
+	if output != "" {
+		if abs, err := filepath.Abs(output); err == nil {
+			output = abs
+		}
+	}
+
+	// 起動時事前チェック（探索コストを払う前に確定失敗を拒否する）
+	if input != "" {
+		if ierr := checkInputFile(input); ierr != nil {
+			return ierr
+		}
+		if oerr := checkOutputExt(output); oerr != nil {
+			return oerr
+		}
+		if aerr := checkDistinctArtifacts(input, output, logFile); aerr != nil {
+			return aerr
+		}
+	}
+
+	// --log-file: 無人実行向けにログをファイルへも二重化する
+	var logSink io.Writer // --tui 時は ui.Options.LogMirror に渡し、表示中も二重化を維持する
+	if logFile != "" {
+		f, lerr := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		if lerr != nil {
+			return fmt.Errorf("opening log file: %w", lerr)
+		}
+		defer f.Close()
+		logSink = f
+		prev := log.Writer()
+		log.SetOutput(io.MultiWriter(prev, f))
+		defer log.SetOutput(prev)
+	}
+
+	mode, merr := decideLaunch(len(args) > 0, ui.IsTerminal(), tui, headless)
+	if merr != nil {
+		return merr
+	}
+	if mode == launchHelp {
+		// 非対話環境での裸起動（パイプ/CI/リダイレクト）。実行せずヘルプのみ表示する
+		return cmd.Help()
+	}
+
+	tmpRoot, terr := toolbin.TempRoot()
+	if terr != nil {
+		return terr
+	}
+	// 同一秒起動の別プロセスとjobDirを共有しないようPID接尾辞を付す
+	jobDir := newJobDir(tmpRoot)
+	sweepStaleJobs(tmpRoot)
+
+	outW, outH, oerr := domain.ParseOutRes(outRes)
+	if oerr != nil {
+		return oerr
+	}
+	if outW == 0 && input != "" {
+		// 未指定=入力動画と同じ解像度。実寸へ解決してログとウィザード初期値に使う
+		dw, dh, derr := ffenc.ProbeVideoDims(ctx, input)
+		if derr != nil {
+			return fmt.Errorf("resolving output resolution from input: %w", derr)
+		}
+		outW, outH = dw, dh
+		log.Printf("[optimize] --out-res empty: following input resolution %dx%d", outW, outH)
+	}
+	if input != "" {
+		// 単一フレーム等の極短入力はシーン検出器が処理できず内部エラーになるため、
+		// 探索開始前に分かりやすい形で拒否する。duration不明（エレメンタリ
+		// ストリーム等）は入力の不正ではないためスキップする
+		if dur, known := ffenc.ProbeDurationSeconds(ctx, input); known && dur < minInputDurationSeconds {
+			return fmt.Errorf("input video is too short (%.3fs): at least a few frames are required", dur)
+		}
+		// 黙って落とす可能性のある構成（複数音声・字幕）を早期に周知する
+		for _, note := range ffenc.ProbeStreamNotes(ctx, input) {
+			log.Printf("[optimize] note: %s", note)
+		}
+	}
+
+	cfg, err := buildSearchConfig(codec, preset, metric, evalProf, outW, outH, encArgs)
+	if err != nil {
+		return err
+	}
+	audioMode, aerr := domain.ParseAudioMode(audio)
+	if aerr != nil {
+		return aerr
+	}
+	log.Printf("[optimize] audio mode: %s", audioMode)
+
+	// デバッグモード: 単一シーンの二分探索のみ（結合しない）。フラグ専用でウィザード対象外。
+	if shot >= 0 {
+		if input == "" {
+			return fmt.Errorf("--shot requires an input video path")
+		}
+		return runShotDebug(ctx, input, shot, cfg, jobDir)
+	}
+
+	switch mode {
+	case launchWizard:
+		// ウィザード（裸起動＋端末）。フラグ値は各項目の初期値として反映される。
+		// ただし--codec未指定時はウィザード側の既定（AV1）に委ねるため空を渡す。
+		seed := cfg
+		if !cmd.Flags().Changed("codec") {
+			seed.Codec = ""
+		}
+		return launchWizardMode(ctx, input, output, seed, audioMode, logSink)
+
+	case launchTUI:
+		outPath := defaultOutputPathIfEmpty(output, input)
+		if err := validatePipelineTarget(jobDir, input, outPath); err != nil {
+			return err
+		}
+		rep, uerr := ui.Run(ctx, newOrchestrator(audioMode), input, outPath, jobDir, cfg, ui.Options{
+			InputPath:  input,
+			OutputPath: outPath,
+			Codec:      cfg.Codec,
+			Preset:     preset,
+			Target:     cfg.TargetScore,
+			Audio:      string(audioMode),
+			LogMirror:  logSink,
+		})
+		if uerr != nil {
+			return uerr
+		}
+		printSummary(input, rep)
+		return nil
+
+	default: // launchPlain
+		outPath := defaultOutputPathIfEmpty(output, input)
+		if err := validatePipelineTarget(jobDir, input, outPath); err != nil {
+			return err
+		}
+		report, perr := orchRun(ctx, input, outPath, jobDir, cfg, audioMode)
+		if perr != nil {
+			return perr
+		}
+		printSummary(input, report)
+		return nil
+	}
 }
 
 // ===== 起動モード判定（memo.md「TUIウィザード化」） =====
