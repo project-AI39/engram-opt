@@ -18,9 +18,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
@@ -32,7 +32,7 @@ jobs:
       # その内容ハッシュをキャッシュキーに使う（バージョン更新で自動的に無効化される）。
       # キャッシュ命中時、engram-setupは冪等に「検証のみ」へ寄る。
       - name: Cache bundled tools
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: build/bin
           key: bundled-tools-${{ runner.os }}-${{ hashFiles('internal/setup/*.go') }}

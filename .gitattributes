@@ -1,0 +1,5 @@
+# 改行はリポジトリ側でLFに統一する。
+# Windows環境（autocrlf=trueのgit・CIランナー含む）でもチェックアウト結果がLFになり、
+# gofmt -l による品質ゲートの誤検知（CRLF→全ファイル違反判定）を防ぐ。
+# text=auto のためバイナリファイルは自動判定により変換対象外。
+* text=auto eol=lf
