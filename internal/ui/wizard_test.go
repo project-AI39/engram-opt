@@ -428,26 +428,26 @@ func TestWizardEvalAlgorithmAndResolutionSelection(t *testing.T) {
 	if m.wiz.evalAlgorithmID() != domain.DefaultEvalAlgorithm {
 		t.Fatalf("initial algorithm = %s", m.wiz.evalAlgorithmID())
 	}
-	if got := m.wiz.evalProfile().Name; got != "vmaf-hd1080" {
-		t.Fatalf("initial resolution = %s, want vmaf-hd1080", got)
+	if got := m.wiz.evalProfile().Name; got != "vmaf_v1.0.16_3d0h" {
+		t.Fatalf("initial resolution = %s, want vmaf_v1.0.16_3d0h", got)
 	}
 
 	// 解像度の循環: hd1080 -> uhd4k -> (wrap) hd1080
 	m.wiz.focus = fEvalRes
 	m, _ = step(t, m, keyRight())
-	if got := m.wiz.evalProfile().Name; got != "vmaf-uhd4k" {
-		t.Fatalf("after right = %s, want vmaf-uhd4k", got)
+	if got := m.wiz.evalProfile().Name; got != "vmaf_4k_v0.6.1" {
+		t.Fatalf("after right = %s, want vmaf_4k_v0.6.1", got)
 	}
 	m, _ = step(t, m, keyRight())
-	if got := m.wiz.evalProfile().Name; got != "vmaf-hd1080" {
-		t.Fatalf("after wrap = %s, want vmaf-hd1080", got)
+	if got := m.wiz.evalProfile().Name; got != "vmaf_v1.0.16_3d0h" {
+		t.Fatalf("after wrap = %s, want vmaf_v1.0.16_3d0h", got)
 	}
 
 	// アルゴリズム循環（現行は1種のため位置不変）で解像度が先頭へ戻る
 	m2 := testWizardModel(t)
 	m2.wiz.focus = fEvalAlg
 	m2, _ = step(t, m2, keyRight())
-	if got := m2.wiz.evalProfile().Name; got != "vmaf-hd1080" {
+	if got := m2.wiz.evalProfile().Name; got != "vmaf_v1.0.16_3d0h" {
 		t.Fatalf("resolution should reset to first on algorithm change: %s", got)
 	}
 }

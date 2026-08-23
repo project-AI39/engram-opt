@@ -7,7 +7,7 @@ import (
 
 // プロファイル解決: 既知名は対応モデルを返し、未知名はフェイルファストでエラー。
 func TestResolveEvalProfile(t *testing.T) {
-	p, err := ResolveEvalProfile("vmaf-uhd4k")
+	p, err := ResolveEvalProfile("vmaf_4k_v0.6.1")
 	if err != nil {
 		t.Fatalf("uhd4k should resolve: %v", err)
 	}

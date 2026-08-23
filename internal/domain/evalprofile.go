@@ -15,15 +15,15 @@ import (
 // QualityEvaluator 実装を配線するだけ。未知のAlgorithmは評価器側で
 // エラーになるため、誤った組合せは静かに動かない（フェイルファスト）。
 type EvalProfile struct {
-	Name      string // CLI/ウィザードで選ぶID（<algorithm>-<resolution> 形式）
+	Name      string // CLI/ウィザードで選ぶID。libvmaf系はversion=へ渡すモデル名そのもの
 	Algorithm string // 評価アルゴリズムID。対応するQualityEvaluator実装のみ受け付ける
 	Model     string // アルゴリズム内でのモデル指定（libvmafなら version= 名）
 	Width     int    // 評価用正規化解像度（両入力をこのサイズへ揃えて比較）
 	Height    int
 }
 
-// 組み込みプロファイル。モデルの実在はpin版ffmpegに対して実機確認済み
-// （memo.md「評価プロファイル」参照）。
+// 組み込みプロファイル。Nameはlibvmafのversion=に渡すモデル名そのもの——
+// ffmpegを普段使う人がコマンドと対応を一目で判るようにする（実機確認済み）。
 //
 // 構造は「アルゴリズム → そのアルゴリズムが対応する評価解像度のリスト」の2軸。
 // ウィザードはこの構造をそのまま2段選択（アルゴリズム→解像度）に使う。
@@ -35,14 +35,14 @@ var evalAlgorithms = []struct {
 	{
 		ID: "libvmaf",
 		Profiles: []EvalProfile{
-			{Name: "vmaf-hd1080", Algorithm: "libvmaf", Model: "vmaf_v1.0.16_3d0h", Width: 1920, Height: 1080},
-			{Name: "vmaf-uhd4k", Algorithm: "libvmaf", Model: "vmaf_4k_v0.6.1", Width: 3840, Height: 2160},
+			{Name: "vmaf_v1.0.16_3d0h", Algorithm: "libvmaf", Model: "vmaf_v1.0.16_3d0h", Width: 1920, Height: 1080},
+			{Name: "vmaf_4k_v0.6.1", Algorithm: "libvmaf", Model: "vmaf_4k_v0.6.1", Width: 3840, Height: 2160},
 		},
 	},
 }
 
 // DefaultEvalProfileName は未指定時に使うプロファイル。
-const DefaultEvalProfileName = "vmaf-hd1080"
+const DefaultEvalProfileName = "vmaf_v1.0.16_3d0h"
 
 // DefaultEvalAlgorithm は現在実装されている唯一の評価アルゴリズム。
 // QualityEvaluator 実装（libvmaf）はこれ以外のAlgorithmを受け付けない。
