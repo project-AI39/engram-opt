@@ -76,7 +76,7 @@ setupの内容: FFmpeg 8.1.2 full build をGitHubリリースからダウンロ�
 
 | フラグ | 既定 | 説明 |
 |---|---|---|
-| `-o, --out <path>` | `<input>.opt.mkv` | 出力先。一時領域配下は起動時に拒否される。推奨コンテナは `.mkv` |
+| `-o, --out <path>` | `<input>.opt.mkv` | 出力先。一時領域配下と入力/ログとの同一パスは起動時に拒否。拡張子は `.mkv`（推奨・全組合せ安全）/ `.mp4` / `.webm` / `.mov` のみ（それ以外は起動時エラー）。出力先ディレクトリは無ければ自動作成される |
 | `--codec <name>` | `h264` | `h264` / `hevc` / `av1` |
 | `--preset <p>` | `medium` | エンコードプリセット。**全試行で一律固定** |
 | `--metric <m>` | `harmonic_mean` | 合否基準のVMAF統計: `harmonic_mean`（調和平均・既定）/ `mean`（算術平均）/ `min`（最悪フレーム）。`min` は最悪1帧が基準のため目標未達でMinCRF採用になりやすい |
