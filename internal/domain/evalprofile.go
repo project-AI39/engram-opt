@@ -114,46 +114,17 @@ func (p EvalProfile) Validate() error {
 	return nil
 }
 
-// 出力解像度プリセット（16:9基準）。CLI/Wizard共通で受ける簡易名。
-// "sd" はストリーミング慣例の 854x480 を採用する。
-var outResPresets = map[string][2]int{
-	"sd":  {854, 480},
-	"hd":  {1280, 720},
-	"fhd": {1920, 1080},
-	"4k":  {3840, 2160},
-}
-
-// OutResPresets はプリセット名と解像度の一覧（ヘルプ表示順）。
-func OutResPresets() []struct {
-	Name          string
-	Width, Height int
-} {
-	return []struct {
-		Name          string
-		Width, Height int
-	}{
-		{"native", 0, 0},
-		{"sd", 854, 480},
-		{"hd", 1280, 720},
-		{"fhd", 1920, 1080},
-		{"4k", 3840, 2160},
-	}
-}
-
 // ParseOutRes は出力解像度指定をパースする。
-// 受ける形式: "native"(未指定扱い) / プリセット名(sd|hd|fhd|4k・大文字小文字不問) /
-// "<偶数>x<偶数>"（例: 1280x720）。エンコーダの要件上、直接指定は偶数のみ許容。
+// 受ける形式は "native"（未指定扱い）または "<偶数>x<偶数>" の直接指定のみ。
+// プリセット名（hd/fhd等）は受け付けない——ユーザーに実寸を意識させるための仕様。
 func ParseOutRes(s string) (width, height int, err error) {
 	s = strings.TrimSpace(s)
 	if s == "" || strings.EqualFold(s, "native") {
 		return 0, 0, nil
 	}
-	if dim, ok := outResPresets[strings.ToLower(s)]; ok {
-		return dim[0], dim[1], nil
-	}
 	parts := strings.SplitN(strings.ToLower(s), "x", 2)
 	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf(`invalid --out-res %q: expect native | sd | hd | fhd | 4k | <even>x<even>`, s)
+		return 0, 0, fmt.Errorf(`invalid --out-res %q: expect native or <even>x<even> (e.g. 1920x1080)`, s)
 	}
 	w, werr := strconv.Atoi(parts[0])
 	h, herr := strconv.Atoi(parts[1])

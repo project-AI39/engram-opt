@@ -148,12 +148,15 @@ func newWizardForm(opts Options) wizardForm {
 	}
 
 	outRes := textinput.New()
-	outRes.Placeholder = "native | sd | hd | fhd | 4k | 1280x720"
+	outRes.Placeholder = "例: 1280x720 / 1920x1080 / 3840x2160（空欄=native）"
 	outRes.Prompt = ""
 	outRes.CharLimit = 32
+	// 既定入力は常に "native"。ユーザーが全消去するとプレースホルダの
+	// WxH形式の例が見える（空欄で確定すればnative扱いに戻る）
 	if opts.OutRes != "" {
-		// --out-res フラグ値を出力解像度欄の初期値へ
 		outRes.SetValue(opts.OutRes)
+	} else {
+		outRes.SetValue("native")
 	}
 
 	// テキスト入力の見た目（値=明色 / プレースホルダ=薄色）
