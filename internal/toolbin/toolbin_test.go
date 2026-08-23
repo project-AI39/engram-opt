@@ -158,6 +158,30 @@ func TestTempRootFollowsLayout(t *testing.T) {
 	}
 }
 
+// TempRoot の基点ディレクトリは存在しなくても自動作成される。
+// os.MkdirTemp は親を作らないため、新規クローン直後（build/tmpが無い状態）で
+// concat等が失敗した実機不具合の回帰防止（2026-08 CI初回実行で発見）。
+func TestTempRootCreatesMissingBase(t *testing.T) {
+	base := stageDeployed(t) // bin/ のみ作成され tmp/ は無い
+	root := filepath.Join(base, "tmp")
+	if FileExists(root) {
+		t.Fatalf("precondition: %s should not exist", root)
+	}
+
+	exe := filepath.Join(base, ToolName("engram-opt"))
+	got, err := tempRootFor(exe)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != root {
+		t.Fatalf("TempRoot = %q, want %q", got, root)
+	}
+	fi, err := os.Stat(root)
+	if err != nil || !fi.IsDir() {
+		t.Fatalf("temp root was not created: %v", err)
+	}
+}
+
 func mustRepoRoot(t *testing.T) string {
 	t.Helper()
 	root, err := RepoRoot()

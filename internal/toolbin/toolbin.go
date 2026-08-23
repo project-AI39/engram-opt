@@ -103,6 +103,8 @@ func resolveFor(exePath, name string) (string, error) {
 
 // TempRoot は実行時の一時作業領域（tmp/）の基点ディレクトリを返す。
 // ジョブごとのサブディレクトリ（タイムスタンプ等）は呼び出し側がこの下に作る。
+// 基点が無い場合はここで作成する（新規展開・新規クローン直後でも、呼び出し順序に
+// 依存せず一時領域が利用可能であることを保証する）。
 func TempRoot() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
@@ -116,5 +118,10 @@ func tempRootFor(exePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(lay.Base, "tmp"), nil
+	root := filepath.Join(lay.Base, "tmp")
+	// os.MkdirTemp は親ディレクトリを作らないため、基点の存在はここで保証する。
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return "", fmt.Errorf("creating temp root: %w", err)
+	}
+	return root, nil
 }
