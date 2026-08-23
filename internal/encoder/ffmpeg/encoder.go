@@ -164,23 +164,15 @@ func pixFmtFor(bitDepth int) (string, error) {
 	}
 }
 
-// svtPreset は x264/x265 流儀の preset 名を SVT-AV1 の数値プリセットへ変換する。
-// SVT-AV1 は数値のみを受け付けるための解決層（値は一般的な対応表に基づく近似）。
-// 数値文字列はそのまま透過し、それ以外の未知名は黙って代替せずエラーにする
-// （ユーザーの指定ミスを早期に表面化させるため）。
+// svtPreset は AV1(libsvtav1) へ渡すプリセット値を検証する。
+// SVT-AV1は数値プリセットのみを受け付けるため、数値文字列のみを透過し、
+// x264流の名前（medium等）とのスケール違いの置換は黙って行わずエラーにする
+// （フェイルファスト。ウィザードの選択肢も数値のみで統一）。
 func svtPreset(preset string) (string, error) {
-	m := map[string]string{
-		"veryslow": "1", "slower": "2", "slow": "4", "medium": "6",
-		"fast": "8", "faster": "10", "veryfast": "12", "superfast": "13",
-	}
-	if v, ok := m[preset]; ok {
-		return v, nil
-	}
-	// 数値が直接来た場合はそのまま透過させる
 	if _, err := strconv.Atoi(preset); err == nil {
 		return preset, nil
 	}
-	return "", fmt.Errorf("unknown preset %q for av1/libsvtav1: use an x264-style name (veryslow..superfast) or a numeric preset", preset)
+	return "", fmt.Errorf("invalid preset %q for av1/libsvtav1: use a numeric preset (e.g. 6). x264-style names are not accepted", preset)
 }
 
 // buildSelectVF はチャンク切り出し用の -vf 値を組み立てる。

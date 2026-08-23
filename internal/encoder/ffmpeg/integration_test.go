@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"engram-opt/internal/domain"
@@ -211,7 +212,7 @@ func TestEncodeChunkContextCancellationWiring(t *testing.T) {
 }
 
 // memo「依存ツール」の対応エンコーダ検証: libx265 / libsvtav1 経路が実際に動作し、
-// どちらも10-bit固定仕様を満たすこと。AV1はpreset名→数値の解決経路も同時に通る。
+// どちらも10-bit固定仕様を満たすこと。AV1は数値プリセットの透過経路も同時に通る。
 func TestEncodeChunkCodecVariantsIntegration(t *testing.T) {
 	testutil.RequireBinaries(t, "ffmpeg", "ffprobe")
 	ctx := context.Background()
@@ -224,7 +225,7 @@ func TestEncodeChunkCodecVariantsIntegration(t *testing.T) {
 		preset string
 	}{
 		{"hevc", domain.CodecHEVC, "medium"},
-		{"av1", domain.CodecAV1, "medium"},
+		{"av1", domain.CodecAV1, "6"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -244,5 +245,23 @@ func TestEncodeChunkCodecVariantsIntegration(t *testing.T) {
 				t.Fatalf("frames=%d pix_fmt=%s", info.Frames, info.PixFmt)
 			}
 		})
+	}
+}
+
+// AV1へx264流のプリセット名を渡した場合は黙って置換されずエラーになる（fail-fast契約）。
+// かつては medium->6 の対応表でサイレント置換しており、回帰防止の恒久化。
+func TestEncodeChunkAV1RejectsNamedPresetIntegration(t *testing.T) {
+	testutil.RequireBinaries(t, "ffmpeg", "ffprobe")
+	ctx := context.Background()
+	video := testutil.GenerateSampleVideo(t, t.TempDir())
+	err := New().EncodeChunk(ctx, video,
+		domain.Scene{Index: 0, StartFrame: 0, EndFrame: 59},
+		domain.EncodeParams{Codec: domain.CodecAV1, CRF: 28, Preset: "medium", BitDepth: 10},
+		filepath.Join(t.TempDir(), "out.mkv"))
+	if err == nil {
+		t.Fatal("av1 + named preset must be an error")
+	}
+	if !strings.Contains(err.Error(), "numeric preset") {
+		t.Fatalf("err = %v, want numeric-preset guidance", err)
 	}
 }

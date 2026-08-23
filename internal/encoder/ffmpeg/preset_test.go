@@ -3,31 +3,26 @@ package ffmpeg
 import "testing"
 
 // SVT-AV1 は数値プリセットのみ受けるための解決層。
-// 既知名は対応数値へ、数値文字列は透過、未知名は黙って代替せずエラー（fail-fast）。
-func TestSvtPresetMapping(t *testing.T) {
-	known := map[string]string{
-		"veryslow": "1", "slower": "2", "slow": "4", "medium": "6",
-		"fast": "8", "faster": "10", "veryfast": "12", "superfast": "13",
-	}
-	for name, want := range known {
-		got, err := svtPreset(name)
-		if err != nil {
-			t.Fatalf("svtPreset(%q) unexpected error: %v", name, err)
-		}
-		if got != want {
-			t.Fatalf("svtPreset(%q) = %q, want %q", name, got, want)
+// 数値文字列は透過、x264流の名前はスケール違いの黙って置換を避けるためエラー（fail-fast）。
+func TestSvtPresetNumericOnly(t *testing.T) {
+	// 数値はそのまま透過（範囲判定はSVT-AV1本体へ委ねる）
+	for _, s := range []string{"0", "4", "6", "13"} {
+		got, err := svtPreset(s)
+		if err != nil || got != s {
+			t.Fatalf("numeric passthrough failed: %q -> %q, %v", s, got, err)
 		}
 	}
 
-	// 数値はそのまま透過
-	got, err := svtPreset("4")
-	if err != nil || got != "4" {
-		t.Fatalf("numeric passthrough failed: %q, %v", got, err)
-	}
-
-	// 未知名はエラー（旧実装は黙って medium 相当へ置換していた）
-	if _, err := svtPreset("meduim"); err == nil { // 意図的なタイポ
-		t.Fatal("unknown preset must be an error, not silently replaced")
+	// x264流の名前は全て拒否（かつての対応表 medium->6 等の置換を禁止）
+	for _, s := range []string{
+		"veryslow", "slower", "slow", "medium",
+		"fast", "faster", "veryfast", "superfast",
+		"meduim", // 意図的なタイポ
+		"",
+	} {
+		if _, err := svtPreset(s); err == nil {
+			t.Fatalf("non-numeric preset %q must be an error, not silently replaced", s)
+		}
 	}
 }
 
@@ -37,7 +32,7 @@ func TestConcatEscape(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{`C:\videos\a.mkv`, `C:\videos\a.mkv`}, // クォート無しはそのまま
 		{"my'movie.mkv", "my" + `'\''` + "movie.mkv"},
-		{"it''s.mkv", "it" + `'\''` + `'\''` + "s.mkv"}, // 連続クォートも全て対象
+		{"it''s.mkv", "it" + `'\''` + `'\''` + "s.mkv"}, // 連続クォートは全て対象
 	}
 	for _, tc := range cases {
 		if got := concatEscape(tc.in); got != tc.want {
