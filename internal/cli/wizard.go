@@ -38,7 +38,7 @@ func launchWizardMode(ctx context.Context, input, output string, cfg domain.Sear
 		BitDepth:        cfg.BitDepth,
 		Metric:          string(cfg.EffectiveMetric()),
 		EvalProfileName: cfg.Eval.Name,
-		OutRes:          formatOutRes(cfg.OutWidth, cfg.OutHeight),
+		OutRes:          outResText(cfg.OutWidth, cfg.OutHeight),
 		Audio:           string(audio),
 		LogMirror:       logSink,
 	}
@@ -117,11 +117,11 @@ func printSummary(input string, r *engine.PipelineReport) {
 	log.Printf("[optimize] output: %s (total trials=%d)", r.OutputPath, r.TotalTrials)
 }
 
-// formatOutRes はSearchConfigの出力解像度をウィザード初期値テキストへ変換する。
-// (0,0)はリサイズなし＝"native"。
-func formatOutRes(w, h int) string {
+// outResText はSearchConfigの出力解像度をウィザード初期値テキストへ変換する。
+// 呼び出し時点で未指定(0,0)は解決済みのため、通常は必ず実寸が入る。防御用の空文字。
+func outResText(w, h int) string {
 	if w <= 0 || h <= 0 {
-		return "native"
+		return ""
 	}
 	return fmt.Sprintf("%dx%d", w, h)
 }

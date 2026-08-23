@@ -101,7 +101,7 @@ func (c SearchConfig) Validate() error {
 		c.OutWidth%2 == 0 && c.OutHeight%2 == 0:
 		// 偶数解像度のみ許容
 	default:
-		return fmt.Errorf("invalid out resolution %dx%d (use even positive dimensions, or 0 for native)", c.OutWidth, c.OutHeight)
+		return fmt.Errorf("invalid out resolution %dx%d (use even positive dimensions; leave unset to follow the input)", c.OutWidth, c.OutHeight)
 	}
 	return nil
 }

@@ -29,14 +29,14 @@ func TestEffectiveEvalProfileDefaults(t *testing.T) {
 	}
 }
 
-// 出力解像度パース: native / プリセット名 / WxHカスタム / 各種不正値。
+// 出力解像度パース: 空欄 / WxH直接指定 / プリセット名拒否 / 各種不正値。
 func TestParseOutRes(t *testing.T) {
 	cases := []struct {
 		in      string
 		w, h    int
 		wantErr bool
 	}{
-		{"native", 0, 0, false},
+		{"", 0, 0, false}, // 空欄=入力解像度（実行時解決）
 		{"", 0, 0, false},
 		{"1280x720", 1280, 720, false},
 		{"3840x2160", 3840, 2160, false},

@@ -148,15 +148,13 @@ func newWizardForm(opts Options) wizardForm {
 	}
 
 	outRes := textinput.New()
-	outRes.Placeholder = "例: 1280x720 / 1920x1080 / 3840x2160（空欄=native）"
+	outRes.Placeholder = "空欄= 入力動画と同じ解像度（例: 1920x1080）"
 	outRes.Prompt = ""
 	outRes.CharLimit = 32
-	// 既定入力は常に "native"。ユーザーが全消去するとプレースホルダの
-	// WxH形式の例が見える（空欄で確定すればnative扱いに戻る）
+	// CLI境界で入力解像度へ解決済みのため、通常は具体的な実寸が初期値として入る。
+	// ユーザーが全消去して空欄で確定した場合は「入力と同じ」扱いへフォールバックする。
 	if opts.OutRes != "" {
 		outRes.SetValue(opts.OutRes)
-	} else {
-		outRes.SetValue("native")
 	}
 
 	// テキスト入力の見た目（値=明色 / プレースホルダ=薄色）

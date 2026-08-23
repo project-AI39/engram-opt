@@ -115,16 +115,17 @@ func (p EvalProfile) Validate() error {
 }
 
 // ParseOutRes は出力解像度指定をパースする。
-// 受ける形式は "native"（未指定扱い）または "<偶数>x<偶数>" の直接指定のみ。
-// プリセット名（hd/fhd等）は受け付けない——ユーザーに実寸を意識させるための仕様。
+// 空文字列は「入力動画と同じ解像度」（実行時に入力の実寸へ解決される）を意味し、
+// それ以外は "<偶数>x<偶数>" の直接指定のみを受け付ける。
+// プリセット名や native といった語は使わない——ユーザーに常に実寸を意識させるため。
 func ParseOutRes(s string) (width, height int, err error) {
 	s = strings.TrimSpace(s)
-	if s == "" || strings.EqualFold(s, "native") {
+	if s == "" {
 		return 0, 0, nil
 	}
 	parts := strings.SplitN(strings.ToLower(s), "x", 2)
 	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf(`invalid --out-res %q: expect native or <even>x<even> (e.g. 1920x1080)`, s)
+		return 0, 0, fmt.Errorf(`invalid --out-res %q: leave empty for input resolution, or use <even>x<even> (e.g. 1920x1080)`, s)
 	}
 	w, werr := strconv.Atoi(parts[0])
 	h, herr := strconv.Atoi(parts[1])

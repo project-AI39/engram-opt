@@ -104,7 +104,21 @@ func registerRun(root *cobra.Command) {
 		jobDir := newJobDir(tmpRoot)
 		sweepStaleJobs(tmpRoot)
 
-		cfg, err := buildSearchConfig(codec, preset, metric, evalProf, outRes)
+		outW, outH, oerr := domain.ParseOutRes(outRes)
+		if oerr != nil {
+			return oerr
+		}
+		if outW == 0 && input != "" {
+			// 未指定=入力動画と同じ解像度。実寸へ解決してログとウィザード初期値に使う
+			dw, dh, derr := ffenc.ProbeVideoDims(ctx, input)
+			if derr != nil {
+				return fmt.Errorf("resolving output resolution from input: %w", derr)
+			}
+			outW, outH = dw, dh
+			log.Printf("[optimize] --out-res empty: following input resolution %dx%d", outW, outH)
+		}
+
+		cfg, err := buildSearchConfig(codec, preset, metric, evalProf, outW, outH)
 		if err != nil {
 			return err
 		}
@@ -172,7 +186,7 @@ func registerRun(root *cobra.Command) {
 	f.BoolVar(&tui, "tui", false, "show interactive dashboard (falls back to plain logs when stdout is not a terminal)")
 	f.StringVar(&logFile, "log-file", "", "append log output to this file (for unattended runs)")
 	f.StringVar(&evalProf, "eval-profile", domain.DefaultEvalProfileName, "evaluation algorithm+resolution set: hd1080 | uhd4k")
-	f.StringVar(&outRes, "out-res", "native", "output resolution: native or <even>x<even> px (e.g. 1920x1080)")
+	f.StringVar(&outRes, "out-res", "", "output resolution in px (e.g. 1920x1080). empty = same as input video")
 }
 
 // ===== 起動モード判定（memo.md「TUIウィザード化」） =====
@@ -310,7 +324,7 @@ func trialLogger(cfg domain.SearchConfig) engine.Observer {
 
 // buildSearchConfig はCLIフラグ値から探索設定を構築する。
 // metricName は "harmonic" | "mean" | "min"（空は既定harmonic）。
-func buildSearchConfig(codecName, preset, metricName, evalProfileName, outResText string) (domain.SearchConfig, error) {
+func buildSearchConfig(codecName, preset, metricName, evalProfileName string, outW, outH int) (domain.SearchConfig, error) {
 	c := domain.VideoCodec(codecName)
 	switch c {
 	case domain.CodecH264, domain.CodecHEVC, domain.CodecAV1:
@@ -333,10 +347,6 @@ func buildSearchConfig(codecName, preset, metricName, evalProfileName, outResTex
 			return domain.SearchConfig{}, err
 		}
 		evalProfile = p
-	}
-	outW, outH, err := domain.ParseOutRes(outResText)
-	if err != nil {
-		return domain.SearchConfig{}, err
 	}
 	cfg := domain.SearchConfig{
 		Codec:       c,
