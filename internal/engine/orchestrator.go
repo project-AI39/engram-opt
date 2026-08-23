@@ -6,11 +6,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	"engram-opt/internal/domain"
+	"engram-opt/internal/toolbin"
 )
 
 // Orchestrator はPer-Shot最適化パイプライン全体の司令塔。
@@ -253,19 +253,8 @@ func retryWithBackoff(ctx context.Context, attempts int, op func() error) error 
 // Windowsではパス大小文字を同一視する。エクスポートは呼び出し側（CLIウィザード等）
 // がパイプライン起動前に早期検証できるようにするため。
 func RequireDistinctPaths(input, output string) error {
-	absIn, err := filepath.Abs(input)
-	if err != nil {
-		return fmt.Errorf("resolving input path: %w", err)
-	}
-	absOut, err := filepath.Abs(output)
-	if err != nil {
-		return fmt.Errorf("resolving output path: %w", err)
-	}
-	same := absIn == absOut
-	if runtime.GOOS == "windows" {
-		same = strings.EqualFold(absIn, absOut)
-	}
-	if same {
+	// 大小文字の同一視（Windows）はtoolbin共通実装に一元化
+	if toolbin.SameAbsPath(input, output) {
 		return fmt.Errorf("output path must differ from input path: %s", output)
 	}
 	return nil

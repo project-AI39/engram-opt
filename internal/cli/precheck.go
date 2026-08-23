@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
+
+	"engram-opt/internal/toolbin"
 )
 
 // minInputDurationSeconds はこれ未満の入力を「短すぎる」として拒否する閾値。
@@ -56,23 +57,14 @@ func checkOutputExt(output string) error {
 	return nil
 }
 
-// samePath は2パスが同一実体を指すかを判定する（Windowsは大小無視）。
-func samePath(a, b string) bool {
-	a, b = filepath.Clean(a), filepath.Clean(b)
-	if runtime.GOOS == "windows" {
-		a, b = strings.ToLower(a), strings.ToLower(b)
-	}
-	return a == b
-}
-
 // checkDistinctArtifacts は出力・ログファイル・入力の相互衝突を検証する。
 // 同一パスへの多重書き込みは、最終リネーム段階での不可解な失敗や入力破壊に直結するため
-// 実行前に拒否する。
+// 実行前に拒否する。同一パス判定はtoolbin共通実装へ一元化済み。
 func checkDistinctArtifacts(input, output, logFile string) error {
-	if output != "" && logFile != "" && samePath(output, logFile) {
+	if output != "" && logFile != "" && toolbin.SameAbsPath(output, logFile) {
 		return fmt.Errorf("--out and --log-file must differ: %s", output)
 	}
-	if logFile != "" && input != "" && samePath(logFile, input) {
+	if logFile != "" && input != "" && toolbin.SameAbsPath(logFile, input) {
 		return fmt.Errorf("--log-file must differ from the input file: %s", logFile)
 	}
 	return nil
