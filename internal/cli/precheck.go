@@ -38,7 +38,9 @@ func checkInputFile(input string) error {
 	return nil
 }
 
-// checkOutputExt は出力拡張子が対応コンテナかを検証する（空＝既定名生成は通す）。
+// checkOutputExt は出力パスの健全性を検証する（空＝既定名生成は通す）。
+// - 拡張子が対応コンテナか
+// - 既存ディレクトリを指していないか（最終リネーム段階での確定失敗を早期に防ぐ）
 func checkOutputExt(output string) error {
 	if output == "" {
 		return nil
@@ -47,6 +49,9 @@ func checkOutputExt(output string) error {
 	if !allowedOutputExts[ext] {
 		return fmt.Errorf(
 			"unsupported output extension %q (use .mkv recommended, or .mp4 / .webm / .mov)", ext)
+	}
+	if fi, err := os.Stat(output); err == nil && fi.IsDir() {
+		return fmt.Errorf("output path is an existing directory: %s", output)
 	}
 	return nil
 }

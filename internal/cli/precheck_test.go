@@ -23,6 +23,9 @@ func TestCheckOutputExt(t *testing.T) {
 			t.Fatalf("checkOutputExt(%q) unexpected error: %v", ok, err)
 		}
 	}
+	if err := checkOutputExt(t.TempDir()); err == nil {
+		t.Fatal("existing directory as output must be rejected")
+	}
 	for _, bad := range []string{"out.txt", "out", "out.avi"} {
 		if err := checkOutputExt(bad); err == nil {
 			t.Fatalf("checkOutputExt(%q) must be rejected", bad)
