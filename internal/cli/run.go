@@ -172,7 +172,7 @@ func registerRun(root *cobra.Command) {
 
 		case launchTUI:
 			outPath := defaultOutputPathIfEmpty(output, input)
-			if err := ensureOutside(jobDir, outPath); err != nil {
+			if err := validatePipelineTarget(jobDir, input, outPath); err != nil {
 				return err
 			}
 			rep, uerr := ui.Run(ctx, newOrchestrator(audioMode), input, outPath, jobDir, cfg, ui.Options{
@@ -192,7 +192,7 @@ func registerRun(root *cobra.Command) {
 
 		default: // launchPlain
 			outPath := defaultOutputPathIfEmpty(output, input)
-			if err := ensureOutside(jobDir, outPath); err != nil {
+			if err := validatePipelineTarget(jobDir, input, outPath); err != nil {
 				return err
 			}
 			report, perr := orchRun(ctx, input, outPath, jobDir, cfg, audioMode)

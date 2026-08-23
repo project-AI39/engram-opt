@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"engram-opt/internal/engine"
 	"engram-opt/internal/toolbin"
 )
 
@@ -68,4 +69,21 @@ func checkDistinctArtifacts(input, output, logFile string) error {
 		return fmt.Errorf("--log-file must differ from the input file: %s", logFile)
 	}
 	return nil
+}
+
+// validatePipelineTarget は「確定した入出力ペア」への共通検証。
+// CLI即実行（既定名解決後）とウィザード[Enter]確定時の双方から呼ぶことで、
+// 片経路だけチェック漏れが起きるドリフトを防ぐ。ログファイル絡みの検証
+// （checkDistinctArtifacts）はCLI専用のためここには含めない。
+func validatePipelineTarget(jobDir, input, output string) error {
+	if err := checkInputFile(input); err != nil {
+		return err
+	}
+	if err := engine.RequireDistinctPaths(input, output); err != nil {
+		return err
+	}
+	if err := checkOutputExt(output); err != nil {
+		return err
+	}
+	return ensureOutside(jobDir, output)
 }

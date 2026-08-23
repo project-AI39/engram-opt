@@ -59,15 +59,8 @@ func launchWizardMode(ctx context.Context, input, output string, cfg domain.Sear
 		if out == "" {
 			out = defaultOutputPathIfEmpty(out, in)
 		}
-		// 元動画保護（出力=入力上書き防止）をパイプライン起動前に早期検証
-		if derr := engine.RequireDistinctPaths(in, out); derr != nil {
-			return ui.PreparedPipeline{}, derr
-		}
-		if oerr := checkOutputExt(out); oerr != nil {
-			return ui.PreparedPipeline{}, oerr
-		}
-		if aerr := ensureOutside(jobDir, out); aerr != nil {
-			return ui.PreparedPipeline{}, aerr
+		if verr := validatePipelineTarget(jobDir, in, out); verr != nil {
+			return ui.PreparedPipeline{}, verr
 		}
 		usedInput = in
 		log.Printf("[optimize] starting: %s -> %s", in, out)

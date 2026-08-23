@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -42,5 +44,32 @@ func TestCheckDistinctArtifacts(t *testing.T) {
 	}
 	if err := checkDistinctArtifacts("in.mkv", "out.mkv", "run.log"); err != nil {
 		t.Fatalf("distinct paths must pass: %v", err)
+	}
+}
+
+// validatePipelineTarget はCLI/ウィザード双方の確定入出力に適用される共通ゲート。
+func TestValidatePipelineTarget(t *testing.T) {
+	dir := t.TempDir()
+	jobDir := newJobDir(dir) // dirは実tmpRoot外のためensureOutsideは通る
+	in := filepath.Join(dir, "in.mp4")
+	if err := os.WriteFile(in, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "out.mkv")
+
+	if err := validatePipelineTarget(jobDir, in, out); err != nil {
+		t.Fatalf("valid pair must pass: %v", err)
+	}
+	if err := validatePipelineTarget(jobDir, in, filepath.Join(jobDir, "o.mkv")); err == nil {
+		t.Fatal("output under jobDir must be rejected")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "nope.mp4")); err == nil {
+		t.Fatal("precondition")
+	}
+	if err := validatePipelineTarget(jobDir, filepath.Join(dir, "nope.mp4"), out); err == nil {
+		t.Fatal("missing input must be rejected")
+	}
+	if err := validatePipelineTarget(jobDir, in, strings.ToUpper(out)); err != nil && runtime.GOOS != "windows" {
+		t.Log("non-windows: case-variant is a distinct path; skipping")
 	}
 }
