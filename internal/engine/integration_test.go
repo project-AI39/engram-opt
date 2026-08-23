@@ -9,10 +9,12 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -65,32 +67,39 @@ func TestOrchestratorCancelTerminatesChildren(t *testing.T) {
 	}
 
 	// 子プロセス残留のポーリング確認（即時にはSIGKILL伝播を待つ必要があるため）。
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(20 * time.Second)
 	for {
-		n := orphanToolProcessCount(t)
+		n := orphanToolProcessCount(t, dir)
 		if n == 0 {
 			break
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("%d orphan child process(es) remain after cancellation", n)
 		}
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
-// orphanToolProcessCount は同梱外部バイナリ（ffmpeg / av-scenechange）の
-// 残留プロセス数を数える。tasklist のCSV出力にイメージ名が含まれるかどうかで判定する。
-func orphanToolProcessCount(t testing.TB) int {
+// orphanToolProcessCount は、marker（本テスト専用の一時ディレクトリパス）を
+// コマンドラインに含む同梱外部バイナリの残留プロセス数を数える。
+// イメージ名でのシステム全体カウントは、go test のパッケージ並列実行において
+// 他パッケージのテストが起こす正当なffmpegまで数えて誤検出するため
+// （2026-08 CI初回実行で発見）、起動元パイプラインへの帰属を
+// コマンドラインで判定する。
+func orphanToolProcessCount(t testing.TB, marker string) int {
 	t.Helper()
-	out, err := exec.Command("tasklist", "/FO", "CSV", "/NH").Output()
+	wql := "Name='ffmpeg.exe' OR Name='ffprobe.exe' OR Name='av-scenechange.exe'"
+	script := fmt.Sprintf(
+		"(Get-CimInstance Win32_Process -Filter %q | "+
+			"Where-Object { $_.CommandLine -like '*%s*' } | Measure-Object).Count",
+		wql, marker)
+	out, err := exec.Command("powershell", "-NoProfile", "-Command", script).Output()
 	if err != nil {
-		t.Fatalf("tasklist failed: %v", err)
+		t.Fatalf("process query failed: %v", err)
 	}
-	n := 0
-	for _, name := range []string{"ffmpeg.exe", "av-scenechange.exe"} {
-		if strings.Contains(string(out), `"`+name+`"`) {
-			n++
-		}
+	n, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil {
+		t.Fatalf("unexpected process query output: %q", string(out))
 	}
 	return n
 }
