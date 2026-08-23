@@ -127,7 +127,7 @@ func (c SearchConfig) EffectiveBitDepth() int {
 // 構築時検証（フェイルファスト）が前提。
 func (c SearchConfig) EffectiveEvalProfile() EvalProfile {
 	if c.Eval.Model == "" {
-		return evalProfiles[0] // hd1080（定義順の先頭＝既定）
+		return DefaultEvalProfile()
 	}
 	return c.Eval
 }

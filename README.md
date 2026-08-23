@@ -36,7 +36,7 @@ engram-opt.exe 入力動画.mp4  ← そのまま即実行
 
 | 起動方法 | 動作 |
 |---|---|
-| 引数なしで起動（ダブルクリック含む）＋端末 | **設定ウィザード**（入力パス／Codec／Preset実値／Min・Max CRF／Target VMAF／Bit Depth／Audio／Output を選んでEnter。全項目に既定値を事前入力済み。`--codec` 等のフラグを併用した場合はその値が初期選択になる） |
+| 引数なしで起動（ダブルクリック含む）＋端末 | **設定ウィザード**（入力パス／Codec／Preset実値／Min・Max CRF／Target VMAF／Bit Depth／Audio／Eval Algorithm／Eval Resolution／Out Res／Output を選んでEnter。全項目に既定値を事前入力済み。`--codec` 等のフラグを併用した場合はその値が初期選択になる） |
 | 端末で `engram-opt.exe 入力.mp4` | 即実行（平文ログ） |
 | `engram-opt.exe 入力.mp4 --tui` | ダッシュボード表示で実行 |
 | パイプ／CI／リダイレクト環境 | 常に平文ログで即実行（`--tui` は無視される）。引数なしの場合はヘルプ表示のみ |

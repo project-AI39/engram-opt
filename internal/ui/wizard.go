@@ -79,7 +79,8 @@ const (
 	fMetric
 	fDepth
 	fAudio
-	fEvalProf
+	fEvalAlg // 評価アルゴリズム（libvmaf / 将来拡張）
+	fEvalRes // 評価解像度（選択中アルゴリズムが対応するもののみ循環）
 	fOutRes
 	fOutput
 	fieldCount
@@ -103,13 +104,14 @@ type wizardForm struct {
 	target textinput.Model
 	outRes textinput.Model
 
-	codecIdx       int
-	presetList     []string // 現在のコーデックに応じた実値リスト（切替時に再構築）
-	presetIdx      int
-	metricIdx      int
-	depthIdx       int
-	audioIdx       int
-	evalProfileIdx int
+	codecIdx   int
+	presetList []string // 現在のコーデックに応じた実値リスト（切替時に再構築）
+	presetIdx  int
+	metricIdx  int
+	depthIdx   int
+	audioIdx   int
+	evalAlgIdx int // evalAlgorithms レジストリのインデックス
+	evalResIdx int // 選択中アルゴリズムが対応する解像度プロファイルのインデックス
 
 	formErr  string
 	starting bool // Enter連打による二重起動防止
@@ -175,15 +177,16 @@ func newWizardForm(opts Options) wizardForm {
 	}
 
 	w := wizardForm{
-		focus:          fInput,
-		input:          in,
-		output:         out,
-		minCRF:         newNumericInput("15", strconv.Itoa(minC)),
-		maxCRF:         newNumericInput("36", strconv.Itoa(maxC)),
-		target:         newNumericInput("95.0", strconv.FormatFloat(target, 'f', 1, 64)),
-		audioIdx:       indexOf(audioLabels(), string(opts.Audio)),
-		evalProfileIdx: indexOf(domain.EvalProfileNames(), opts.EvalProfileName),
-		outRes:         outRes,
+		focus:      fInput,
+		input:      in,
+		output:     out,
+		minCRF:     newNumericInput("15", strconv.Itoa(minC)),
+		maxCRF:     newNumericInput("36", strconv.Itoa(maxC)),
+		target:     newNumericInput("95.0", strconv.FormatFloat(target, 'f', 1, 64)),
+		audioIdx:   indexOf(audioLabels(), string(opts.Audio)),
+		evalAlgIdx: indexOf(domain.EvalAlgorithmIDs(), domain.DefaultEvalAlgorithm),
+		evalResIdx: initialEvalResIdx(opts.EvalProfileName),
+		outRes:     outRes,
 	}
 	for _, t := range []*textinput.Model{&w.minCRF, &w.maxCRF, &w.target} {
 		t.TextStyle = valueStyle
@@ -244,7 +247,8 @@ func indexOf(list []string, v string) int {
 
 func (w *wizardForm) isSelectField() bool {
 	return w.focus == fCodec || w.focus == fPreset || w.focus == fMetric ||
-		w.focus == fDepth || w.focus == fAudio || w.focus == fEvalProf
+		w.focus == fDepth || w.focus == fAudio || w.focus == fEvalAlg ||
+		w.focus == fEvalRes
 }
 
 func (w *wizardForm) isTextField() bool { return !w.isSelectField() }
@@ -256,7 +260,28 @@ func (w *wizardForm) metric() domain.ScoreMetric {
 }
 func (w *wizardForm) depth() int              { return depthChoices[w.depthIdx] }
 func (w *wizardForm) audio() domain.AudioMode { return audioChoices[w.audioIdx] }
-func (w *wizardForm) evalProfileName() string { return domain.EvalProfileNames()[w.evalProfileIdx] }
+func (w *wizardForm) evalAlgorithmID() string { return domain.EvalAlgorithmIDs()[w.evalAlgIdx] }
+
+// evalProfile は（アルゴリズム×解像度）の選択から確定プロファイルを返す。
+// 解像度リストはアルゴリズム毎に再構築済みのため、範囲外は原理的に起きない。
+func (w *wizardForm) evalProfile() domain.EvalProfile {
+	profiles := domain.EvalProfilesFor(w.evalAlgorithmID())
+	if len(profiles) == 0 {
+		return domain.DefaultEvalProfile()
+	}
+	return profiles[mod(w.evalResIdx, len(profiles))]
+}
+
+// initialEvalResIdx はフラグ由来のプロファイル名から初期解像度インデックスを求める。
+// アルゴリズムは常にlibvmaf固定で起動する（現行実装は1アルゴリズムのみのため）。
+func initialEvalResIdx(profileName string) int {
+	for i, p := range domain.EvalProfilesFor(domain.DefaultEvalAlgorithm) {
+		if p.Name == profileName {
+			return i
+		}
+	}
+	return 0
+}
 
 // resetPresetList は現在のCodecに応じてPresetリストを再構築し既定へ戻す。
 // コーデック間でプリセット体系が異なるため、切替時の不正組合せを防ぐ。
@@ -329,24 +354,30 @@ func (m Model) stepField(dir int) (Model, tea.Cmd) {
 		w.depthIdx = mod(w.depthIdx+dir, len(depthChoices))
 	case fAudio:
 		w.audioIdx = mod(w.audioIdx+dir, len(audioChoices))
-	case fEvalProf:
-		names := domain.EvalProfileNames()
-		w.evalProfileIdx = mod(w.evalProfileIdx+dir, len(names))
+	case fEvalAlg:
+		w.evalAlgIdx = mod(w.evalAlgIdx+dir, len(domain.EvalAlgorithmIDs()))
+		w.evalResIdx = 0 // アルゴリズム切替時は解像度選択を先頭へ戻す（対応集合が変わるため）
+	case fEvalRes:
+		res := domain.EvalProfilesFor(w.evalAlgorithmID())
+		w.evalResIdx = mod(w.evalResIdx+dir, len(res))
 	case fMinCRF:
 		stepInt(&w.minCRF, dir, 0, 63)
 	case fMaxCRF:
 		stepInt(&w.maxCRF, dir, 0, 63)
 	case fTarget:
 		stepFloat(&w.target, float64(dir)*0.5, 50, 100)
-	default: // fInput / fOutput: カーソル移動
+	default: // テキストフィールド: カーソル移動をtextinputへ委譲
 		kt := tea.KeyRight
 		if dir < 0 {
 			kt = tea.KeyLeft
 		}
 		var c tea.Cmd
-		if w.focus == fInput {
+		switch w.focus {
+		case fInput:
 			w.input, c = w.input.Update(tea.KeyMsg{Type: kt})
-		} else {
+		case fOutRes:
+			w.outRes, c = w.outRes.Update(tea.KeyMsg{Type: kt})
+		default: // fOutput
 			w.output, c = w.output.Update(tea.KeyMsg{Type: kt})
 		}
 		return m, c
@@ -440,12 +471,8 @@ func (w *wizardForm) buildConfig() (domain.SearchConfig, error) {
 		BitDepth:    w.depth(),
 		Metric:      w.metric(),
 	}
-	// Eval Profile はcycle選択（未知名になり得ないためResolveエラーは原理的に出ない）
-	if p, err := domain.ResolveEvalProfile(w.evalProfileName()); err != nil {
-		return domain.SearchConfig{}, err
-	} else {
-		cfg.Eval = p
-	}
+	// 評価は（アルゴリズム→解像度）の2段選択から確定プロファイルを採用する
+	cfg.Eval = w.evalProfile()
 	// Out Res はテキスト入力（"native" or WxH）。パース＋偶数検証はdomainへ一元
 	outW, outH, oerr := domain.ParseOutRes(w.outRes.Value())
 	if oerr != nil {
@@ -543,8 +570,10 @@ func renderSetup(m Model) string {
 			selectValue(fmt.Sprintf("%d (%s)", d, depthLabels[d]), w.focus == fDepth)),
 		row("Audio:", w.focus == fAudio, selectValue(string(audioChoices[w.audioIdx]), w.focus == fAudio)),
 		"", sectionCaption("evaluation"),
-		row("Eval Profile:", w.focus == fEvalProf,
-			selectValue(w.evalProfileName(), w.focus == fEvalProf)),
+		row("Eval Algorithm:", w.focus == fEvalAlg,
+			selectValue(w.evalAlgorithmID(), w.focus == fEvalAlg)),
+		row("Eval Resolution:", w.focus == fEvalRes,
+			selectValue(w.evalProfile().Name, w.focus == fEvalRes)),
 		"", sectionCaption("output"),
 		row("Out Res:", w.focus == fOutRes, w.outRes.View()),
 		row("Output:", w.focus == fOutput, w.output.View()),

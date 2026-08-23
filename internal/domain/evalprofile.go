@@ -23,12 +23,22 @@ type EvalProfile struct {
 }
 
 // 組み込みプロファイル。モデルの実在はpin版ffmpegに対して実機確認済み
-// （memo.md「評価プロファイル」参照）。追加はこの表＋ヘルプ文言のみで済む設計。
-// 現在はlibvmaf系のみ。将来的にXPSNR/SSIM等を追加する場合は
-// Algorithm を分けた別エントリとなる（例: {Name:"xpsnr-hd", Algorithm:"xpsnr", ...}）。
-var evalProfiles = []EvalProfile{
-	{Name: "vmaf-hd1080", Algorithm: "libvmaf", Model: "vmaf_v1.0.16_3d0h", Width: 1920, Height: 1080},
-	{Name: "vmaf-uhd4k", Algorithm: "libvmaf", Model: "vmaf_4k_v0.6.1", Width: 3840, Height: 2160},
+// （memo.md「評価プロファイル」参照）。
+//
+// 構造は「アルゴリズム → そのアルゴリズムが対応する評価解像度のリスト」の2軸。
+// ウィザードはこの構造をそのまま2段選択（アルゴリズム→解像度）に使う。
+// 新アルゴリズム追加はこのレジストリへの1ブロック追加＋対応評価器実装のみ。
+var evalAlgorithms = []struct {
+	ID       string
+	Profiles []EvalProfile
+}{
+	{
+		ID: "libvmaf",
+		Profiles: []EvalProfile{
+			{Name: "vmaf-hd1080", Algorithm: "libvmaf", Model: "vmaf_v1.0.16_3d0h", Width: 1920, Height: 1080},
+			{Name: "vmaf-uhd4k", Algorithm: "libvmaf", Model: "vmaf_4k_v0.6.1", Width: 3840, Height: 2160},
+		},
+	},
 }
 
 // DefaultEvalProfileName は未指定時に使うプロファイル。
@@ -38,31 +48,57 @@ const DefaultEvalProfileName = "vmaf-hd1080"
 // QualityEvaluator 実装（libvmaf）はこれ以外のAlgorithmを受け付けない。
 const DefaultEvalAlgorithm = "libvmaf"
 
+// EvalAlgorithmIDs はアルゴリズムIDの一覧（ウィザード第1段の選択肢）。
+func EvalAlgorithmIDs() []string {
+	ids := make([]string, 0, len(evalAlgorithms))
+	for _, a := range evalAlgorithms {
+		ids = append(ids, a.ID)
+	}
+	return ids
+}
+
+// EvalProfilesFor は指定アルゴリズムが対応する評価解像度（プロファイル）一覧を返す。
+// 未知名には空スライスを返す（呼び出し側はValidate/Resolveで弾く）。
+func EvalProfilesFor(algorithm string) []EvalProfile {
+	for _, a := range evalAlgorithms {
+		if a.ID == algorithm {
+			return a.Profiles
+		}
+	}
+	return nil
+}
+
 // DefaultEvalProfile は既定プロファイルを返す（テスト等で明示的に渡す場合の利便用）。
 func DefaultEvalProfile() EvalProfile {
-	return evalProfiles[0]
+	return evalAlgorithms[0].Profiles[0]
 }
 
 // ResolveEvalProfile は名前からプロファイルを解決する。
 // 未知の名前は黙って既定へ落とさずエラーにする（フェイルファスト方針）。
 func ResolveEvalProfile(name string) (EvalProfile, error) {
-	for _, p := range evalProfiles {
-		if p.Name == name {
-			return p, nil
+	for _, a := range evalAlgorithms {
+		for _, p := range a.Profiles {
+			if p.Name == name {
+				return p, nil
+			}
 		}
 	}
-	names := make([]string, 0, len(evalProfiles))
-	for _, p := range evalProfiles {
-		names = append(names, p.Name)
+	var names []string
+	for _, a := range evalAlgorithms {
+		for _, p := range a.Profiles {
+			names = append(names, p.Name)
+		}
 	}
 	return EvalProfile{}, fmt.Errorf("unknown eval profile %q (valid: %s)", name, strings.Join(names, ", "))
 }
 
-// EvalProfileNames は選択肢IDの一覧（ウィザードcycle表示順）。
+// EvalProfileNames は全プロファイルIDの一覧（CLIヘルプ等の表示順）。
 func EvalProfileNames() []string {
-	names := make([]string, 0, len(evalProfiles))
-	for _, p := range evalProfiles {
-		names = append(names, p.Name)
+	var names []string
+	for _, a := range evalAlgorithms {
+		for _, p := range a.Profiles {
+			names = append(names, p.Name)
+		}
 	}
 	return names
 }
