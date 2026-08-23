@@ -259,6 +259,7 @@ internal/
   │    ├── setup.go               # setupサブコマンド定義（処理本体は internal/setup へ委譲）
   │    ├── run.go                 # 即実行系（RunE・decideLaunch・buildSearchConfig）
   │    ├── jobdir.go              # ジョブ一時領域の生成・72h掃除
+  │    ├── precheck.go           # 起動時事前チェック（入力/拡張子/衝突/極短）
   ├── setup/                      # 依存関係セットアップ本体（FFmpeg DL・cargo build・検証）
   ├── domain/                     # 共通の型・インターフェース（依存の錨）
   │    ├── scene.go               # シーン境界情報
