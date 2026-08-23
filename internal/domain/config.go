@@ -55,6 +55,22 @@ const (
 	DefaultBitDepth    = 10
 )
 
+// ResolveVideoCodec はCLI/ウィザード入力を VideoCodec へ解決する。
+// コーデック短名（h264等）とffmpegエンコーダ実名（libx264等）の両方を受け付ける。
+// 未知名はエラー（フェイルファスト）。
+func ResolveVideoCodec(s string) (VideoCodec, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "h264", "libx264", "avc":
+		return CodecH264, nil
+	case "hevc", "libx265", "h265":
+		return CodecHEVC, nil
+	case "av1", "libsvtav1", "svt-av1", "svtav1":
+		return CodecAV1, nil
+	default:
+		return "", fmt.Errorf("unsupported codec %q (use h264 | hevc | av1 or libx264 | libx265 | libsvtav1)", s)
+	}
+}
+
 // Validate はSearchConfigの整合性を検証する（ウィザード確定時とCLI構築時の共通検証）。
 func (c SearchConfig) Validate() error {
 	switch c.Codec {
@@ -148,11 +164,13 @@ const DefaultAudioMode = AudioCopy
 
 // ParseAudioMode はCLIフラグ値を AudioMode へ変換する。未知名はエラー。
 func ParseAudioMode(s string) (AudioMode, error) {
-	switch m := AudioMode(s); m {
+	switch m := AudioMode(strings.ToLower(strings.TrimSpace(s))); m {
 	case AudioCopy, AudioOpus, AudioAAC, AudioNone:
 		return m, nil
+	case "libopus": // ffmpegの-c:a実名も受ける（表示はopusで統一）
+		return AudioOpus, nil
 	default:
-		return "", fmt.Errorf("invalid audio mode %q (use copy | opus | aac | none)", s)
+		return "", fmt.Errorf("invalid audio mode %q (use copy | opus | aac | none; alias: libopus)", s)
 	}
 }
 

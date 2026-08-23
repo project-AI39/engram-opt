@@ -15,9 +15,10 @@ func TestParseAudioMode(t *testing.T) {
 		{"opus", AudioOpus, false},
 		{"aac", AudioAAC, false},
 		{"none", AudioNone, false},
+		{"libopus", AudioOpus, false}, // ffmpegの-c:a実名エイリアス
+		{"COPY", AudioCopy, false},    // 大文字小文字不問（Trim/ToLowerで正規化）
 		{"", "", true},
 		{"mp3", "", true},
-		{"COPY", "", true}, // 大文字は許容しない（CLIフラグは小文字統一）
 	}
 	for _, c := range cases {
 		got, err := ParseAudioMode(c.in)

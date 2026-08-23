@@ -178,9 +178,9 @@ func registerRun(root *cobra.Command) {
 	f := root.Flags()
 	f.StringVarP(&output, "out", "o", "", "final output path (default: <input>.opt.mkv)")
 	f.IntVar(&shot, "shot", -1, "debug: run CRF search on this scene index only")
-	f.StringVar(&codec, "codec", string(domain.CodecH264), "encode codec: h264 | hevc | av1")
+	f.StringVar(&codec, "codec", string(domain.CodecH264), "encode codec: h264 | hevc | av1 (aliases: libx264 | libx265 | libsvtav1)")
 	f.StringVar(&preset, "preset", "medium", "encoder preset (identical across all trials)")
-	f.StringVar(&metric, "metric", string(domain.MetricHarmonic), "target score basis: harmonic | mean | min")
+	f.StringVar(&metric, "metric", string(domain.MetricHarmonic), "target score basis: harmonic_mean | mean | min (legacy alias: harmonic)")
 	f.StringVar(&audio, "audio", string(domain.DefaultAudioMode), "final audio track: copy | opus | aac | none")
 	f.BoolVar(&headless, "headless", false, "never show any interactive UI (plain logs only)")
 	f.BoolVar(&tui, "tui", false, "show interactive dashboard (falls back to plain logs when stdout is not a terminal)")
@@ -325,15 +325,13 @@ func trialLogger(cfg domain.SearchConfig) engine.Observer {
 // buildSearchConfig はCLIフラグ値から探索設定を構築する。
 // metricName は "harmonic" | "mean" | "min"（空は既定harmonic）。
 func buildSearchConfig(codecName, preset, metricName, evalProfileName string, outW, outH int) (domain.SearchConfig, error) {
-	c := domain.VideoCodec(codecName)
-	switch c {
-	case domain.CodecH264, domain.CodecHEVC, domain.CodecAV1:
-		// OK
-	default:
-		return domain.SearchConfig{}, fmt.Errorf("unsupported codec %q (use h264 | hevc | av1)", codecName)
+	// コーデックは短名とffmpegエンコーダ実名（libx264等）の両方を受ける
+	c, cerr := domain.ResolveVideoCodec(codecName)
+	if cerr != nil {
+		return domain.SearchConfig{}, cerr
 	}
 	var metric domain.ScoreMetric
-	if metricName != "" && metricName != string(domain.MetricHarmonic) {
+	if metricName != "" {
 		m, err := domain.ParseScoreMetric(metricName)
 		if err != nil {
 			return domain.SearchConfig{}, err

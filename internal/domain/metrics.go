@@ -14,18 +14,21 @@ type QualityMetrics struct {
 type ScoreMetric string
 
 const (
-	MetricHarmonic ScoreMetric = "harmonic" // 調和平均（既定）
-	MetricMean     ScoreMetric = "mean"     // 算術平均
-	MetricMin      ScoreMetric = "min"      // 最悪フレーム
+	MetricHarmonic ScoreMetric = "harmonic_mean" // 調和平均（既定。libvmaf JSONキーと同一表記）
+	MetricMean     ScoreMetric = "mean"          // 算術平均
+	MetricMin      ScoreMetric = "min"           // 最悪フレーム
 )
 
 // ParseScoreMetric はCLI/ウィザードの文字列値を ScoreMetric へ変換する。未知名はエラー。
+// 旧表記 "harmonic"（libvmaf JSONキー導入前の略称）も後方互換で受ける。
 func ParseScoreMetric(s string) (ScoreMetric, error) {
 	switch m := ScoreMetric(s); m {
 	case MetricHarmonic, MetricMean, MetricMin:
 		return m, nil
+	case "harmonic":
+		return MetricHarmonic, nil
 	default:
-		return "", fmt.Errorf("invalid score metric %q (use harmonic | mean | min)", s)
+		return "", fmt.Errorf("invalid score metric %q (use harmonic_mean | mean | min)", s)
 	}
 }
 

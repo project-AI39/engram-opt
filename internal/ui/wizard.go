@@ -178,13 +178,13 @@ func newWizardForm(opts Options) wizardForm {
 	}
 
 	w := wizardForm{
-		focus:      fInput,
-		input:      in,
-		output:     out,
-		minCRF:     newNumericInput("15", strconv.Itoa(minC)),
-		maxCRF:     newNumericInput("36", strconv.Itoa(maxC)),
-		target:     newNumericInput("95.0", strconv.FormatFloat(target, 'f', 1, 64)),
-		audioIdx:   indexOf(audioLabels(), string(opts.Audio)),
+		focus:  fInput,
+		input:  in,
+		output: out,
+		minCRF: newNumericInput("15", strconv.Itoa(minC)),
+		maxCRF: newNumericInput("36", strconv.Itoa(maxC)),
+		target: newNumericInput("95.0", strconv.FormatFloat(target, 'f', 1, 64)),
+
 		evalAlgIdx: indexOf(domain.EvalAlgorithmIDs(), domain.DefaultEvalAlgorithm),
 		evalResIdx: initialEvalResIdx(opts.EvalProfileName),
 		outRes:     outRes,
@@ -196,6 +196,12 @@ func newWizardForm(opts Options) wizardForm {
 	for i, c := range codecChoices {
 		if c == opts.Codec {
 			w.codecIdx = i
+			break
+		}
+	}
+	for i, a := range audioChoices {
+		if a == domain.AudioMode(opts.Audio) {
+			w.audioIdx = i // ラベル（libopus併記）ではなく値で同定する
 			break
 		}
 	}
@@ -217,15 +223,6 @@ func newWizardForm(opts Options) wizardForm {
 	}
 	w.metricIdx = indexOf(metricLabels(), string(opts.Metric))
 	return w
-}
-
-// audioLabels は音声モードの実値一覧（選択肢テーブルの文字列表現）。
-func audioLabels() []string {
-	list := make([]string, len(audioChoices))
-	for i, a := range audioChoices {
-		list[i] = string(a)
-	}
-	return list
 }
 
 // metricLabels は合否指標の実値一覧。
@@ -261,6 +258,16 @@ func (w *wizardForm) metric() domain.ScoreMetric {
 }
 func (w *wizardForm) depth() int              { return depthChoices[w.depthIdx] }
 func (w *wizardForm) audio() domain.AudioMode { return audioChoices[w.audioIdx] }
+
+// codecLabels / audioLabels は選択値そのものではなく、ffmpeg実名を併記した表示ラベル。
+// 値の同定は必ず codecChoices/audioChoices の文字列で行う（ラベルでマッチしない）。
+func codecLabels() []string {
+	return []string{"h264 (libx264)", "hevc (libx265)", "av1 (libsvtav1)"}
+}
+
+func audioLabels() []string {
+	return []string{"copy", "opus (libopus)", "aac", "none (-an)"}
+}
 func (w *wizardForm) evalAlgorithmID() string { return domain.EvalAlgorithmIDs()[w.evalAlgIdx] }
 
 // evalProfile は（アルゴリズム×解像度）の選択から確定プロファイルを返す。
@@ -558,7 +565,7 @@ func renderSetup(m Model) string {
 	rows = append(rows, row("入力ファイル", w.focus == fInput, w.input.View()))
 	rows = append(rows, "", sectionCaption("encode"))
 	rows = append(rows,
-		row("Codec:", w.focus == fCodec, selectValue(string(codecChoices[w.codecIdx]), w.focus == fCodec)),
+		row("Codec:", w.focus == fCodec, selectValue(codecLabels()[w.codecIdx], w.focus == fCodec)),
 		row("Preset:", w.focus == fPreset, selectValue(w.preset(), w.focus == fPreset)),
 		row("Min CRF:", w.focus == fMinCRF, w.minCRF.View()),
 		row("Max CRF:", w.focus == fMaxCRF, w.maxCRF.View()),
@@ -569,7 +576,7 @@ func renderSetup(m Model) string {
 	rows = append(rows,
 		row("Bit Depth:", w.focus == fDepth,
 			selectValue(fmt.Sprintf("%d (%s)", d, depthLabels[d]), w.focus == fDepth)),
-		row("Audio:", w.focus == fAudio, selectValue(string(audioChoices[w.audioIdx]), w.focus == fAudio)),
+		row("Audio:", w.focus == fAudio, selectValue(audioLabels()[w.audioIdx], w.focus == fAudio)),
 		"", sectionCaption("evaluation"),
 		row("Eval Algorithm:", w.focus == fEvalAlg,
 			selectValue(w.evalAlgorithmID(), w.focus == fEvalAlg)),
