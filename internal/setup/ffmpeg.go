@@ -168,9 +168,9 @@ func verifyTools(binDir string) error {
 
 // checkEncoderPresent は -encoders 一覧に指定エンコーダが含まれることを確認する。
 func checkEncoderPresent(ffmpegPath, name string) error {
-	out, err := exec.Command(ffmpegPath, "-hide_banner", "-encoders").Output()
+	out, err := exec.Command(ffmpegPath, "-hide_banner", "-encoders").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("-encoders failed: %w", err)
+		return fmt.Errorf("-encoders failed: %w\n%s", err, tail(string(out), 10))
 	}
 	for _, line := range strings.Split(string(out), "\n") {
 		fields := strings.Fields(line)
@@ -183,9 +183,9 @@ func checkEncoderPresent(ffmpegPath, name string) error {
 }
 
 func checkVersion(exePath, expectPrefix string) error {
-	out, err := exec.Command(exePath, "-hide_banner", "-version").Output()
+	out, err := exec.Command(exePath, "-hide_banner", "-version").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("-version failed: %w", err)
+		return fmt.Errorf("-version failed: %w\n%s", err, tail(string(out), 10))
 	}
 	if !strings.Contains(string(out), expectPrefix+" version") {
 		return fmt.Errorf("unexpected output: %q", firstLine(string(out)))
@@ -194,9 +194,9 @@ func checkVersion(exePath, expectPrefix string) error {
 }
 
 func checkVMAFFilter(ffmpegPath string) error {
-	out, err := exec.Command(ffmpegPath, "-hide_banner", "-filters").Output()
+	out, err := exec.Command(ffmpegPath, "-hide_banner", "-filters").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("-filters failed: %w", err)
+		return fmt.Errorf("-filters failed: %w\n%s", err, tail(string(out), 10))
 	}
 	for _, line := range strings.Split(string(out), "\n") {
 		fields := strings.Fields(line)

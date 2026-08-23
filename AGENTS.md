@@ -13,7 +13,7 @@
 - **配置**: 単体テストは各パッケージ内の `*_test.go`。実バイナリを使う統合テストは同パッケージの `integration_test.go`。パイプライン全走査は `test/e2e/`。
 - **ガード**: 統合/E2Eは冒頭で `testutil.RequireBinaries(t, ...)` を呼ぶ（`-short` 指定時や未セットアップ環境ではスキップ理由付きでSkipされる）。
 - **実行**: 高速ループは `go test -short ./internal/...`（数秒）。フル検証は `go test ./internal/... ./test/...`（統合＋E2Eで約1〜2分）。**ファジング**: `internal/domain/fuzz_test.go` のシードは通常 `go test` でも毎回実行される。深掘りは `go test ./internal/domain/ -run '^$' -fuzz FuzzParseOutRes -fuzztime 20s` 等でローカル実行する（失敗コーパスは testdata/fuzz へ落ちるのでコミットする）。
-- **品質ゲート（自動強制）**: `go run ./cmd/engram-package` はビルド前に `gofmt -l` ＋ `go vet ./...` を実行し、違反があればZip化を中止する（`internal/devcheck`）。単発実行は `go run ./cmd/engram-setup check`。素の `go build` にはフック不可のため迂回可能——最終門番はこのpackage経由。
+- **品質ゲート（自動強制）**: `go run ./cmd/engram-package` はビルド前に `gofmt -l` ＋ `go vet ./...` を実行し、違反があればZip化を中止する（`internal/devcheck`）。単発実行は `go run ./cmd/engram-setup check`。素の `go build` にはフック不可のため迂回可能——最終門番はこのpackage経由。**静的解析**: `go run honnef.co/go/tools/cmd/staticcheck@latest ./...` を改善フェーズの監査として随時実行する（ゲート必須にはしない。依存追加を避ける方針のため手動監査位置づけ）。
 - **フィクスチャ**: テスト動画はGitにコミットしない。`testutil.GenerateSampleVideo` が lavfi で動的生成する（320x240/30fps/6秒=180フレーム、ハードカット60/120フレーム目）。
 - **仕様照合**: 各アサートはmemo.md固定点に対応づけ済み（フレーム完全一致＝select区間、10-bit＝yuv420p10le、チャンク先頭IDR＝FirstFrameIsKey、選択指標>=目標、成功時tmp破棄等）。
 

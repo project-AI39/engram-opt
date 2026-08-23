@@ -488,6 +488,21 @@ Output       : [ 空=<入力>.opt.mkv                            ]
 - **評価ログの配置と保持**: VMAFレポートはjobDir配下の専用サブディレクトリに出す（%TEMP%禁止規約準拠）。掃除対象は自分が作ったサブディレクトリのみ（呼び出し側所有ディレクトリを消さない）。成功時のみ削除、失敗時は証拠として保持。モデルフォールバック時は警告ログ（スコアのモデル間非比較可能性の明示）。
 - **Evaluate契約の変更**: `QualityEvaluator.Evaluate(..., workDir)` に作業領域引数を追加。評価成果物はシーン作業領域に属するという所有権の明確化。
 
+### 改善ラウンド第4弾（2026-08-24 / 静的解析・診断性残枠・ファズ拡充）
+
+* staticcheck@latest 導入監査 → 6件検出し全て解消:
+  * toolbin.detectLayout（export解除時に残った死蔵ラッパー）削除
+  * ui: 未使用 titleStyle / divider 削除
+  * wizard エラー文字列の大文字始まり3箇所をST1005準拠へ小文字化
+  * ゲート必須化は見送り（依存追加回避）。手動監査コマンドをAGENTSへ記載
+* 子プロセスstderr要約の残枠を埋める: setup/ffmpeg 3箇所（encoders/version/filters）、
+  evaluator probeFrameRate、packaging notices（collectModules/goRunner）へTail添付。
+  これで全パッケージの子プロセス失敗が原因付きで表面化する。
+* ファズ拡充: FuzzParseAudioMode（戻り値は定数4種のみ）と
+  FuzzConcatEscape（エスケープ後に生シングルクォートが残らない）を追加。
+  計5ターゲット・約1150万実行で不変条件違反ゼロ。
+* gofmt -s もクリーン。
+
 ### バグハント第3ラウンド＋改善回し（2026-08-24 / precheck逆攻撃・診断性・一元化）
 
 * 発見・修正:

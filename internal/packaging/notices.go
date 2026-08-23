@@ -80,9 +80,9 @@ type goRunner func(args []string) ([]byte, error)
 
 // collectModules は実行バイナリへ静的にリンクされたモジュール一覧を取得する。
 func collectModules(exePath string) ([]moduleInfo, error) {
-	out, err := exec.Command("go", "version", "-m", exePath).Output()
+	out, err := exec.Command("go", "version", "-m", exePath).CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("go version -m %s: %w", exePath, err)
+		return nil, fmt.Errorf("go version -m %s: %w\n%s", exePath, err, toolbin.Tail(string(out), 5))
 	}
 	return parseGoVersionM(out), nil
 }
@@ -322,7 +322,11 @@ func BuildThirdPartyNotices(root, exePath string) (string, error) {
 	run := func(args []string) ([]byte, error) {
 		cmd := exec.Command("go", args...)
 		cmd.Dir = root
-		return cmd.Output()
+		b, rerr := cmd.CombinedOutput()
+		if rerr != nil {
+			return nil, fmt.Errorf("go %s: %w\n%s", strings.Join(args, " "), rerr, toolbin.Tail(string(b), 5))
+		}
+		return b, nil
 	}
 	if err := resolveModuleDirs(run, mods); err != nil {
 		return "", err

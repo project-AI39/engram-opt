@@ -156,9 +156,9 @@ func probeFrameRate(ctx context.Context, ffprobePath, inputPath string) (int64, 
 		"-v", "error", "-select_streams", "v:0",
 		"-show_entries", "stream=r_frame_rate",
 		"-of", "default=noprint_wrappers=1:nokey=1",
-		inputPath).Output()
+		inputPath).CombinedOutput()
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("ffprobe (frame rate) failed: %w\n%s", err, toolbin.Tail(string(out), 5))
 	}
 	s := strings.TrimSpace(string(out))
 	numStr, denStr, ok := strings.Cut(s, "/")

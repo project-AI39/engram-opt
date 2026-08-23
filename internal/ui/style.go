@@ -33,7 +33,6 @@ var (
 // ===== 意味スタイル =====
 
 var (
-	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(cPrimary)
 	dimStyle    = lipgloss.NewStyle().Foreground(cMuted)
 	hitStyle    = lipgloss.NewStyle().Bold(true).Foreground(cGreen)
 	missStyle   = lipgloss.NewStyle().Bold(true).Foreground(cAmber)
@@ -115,11 +114,6 @@ func statBlock(label, value string) string {
 // cell は固定幅にパディングしてから着色する（桁揃えの要）。
 func cell(w int, s string, st lipgloss.Style) string {
 	return st.Render(fmt.Sprintf("%-*s", w, s))
-}
-
-// divider は横罫線。
-func divider(width int) string {
-	return lipgloss.NewStyle().Foreground(cBorder).Render(strings.Repeat("─", maxInt(0, width)))
 }
 
 // phaseBadge は進行フェーズの色付きバッジ。

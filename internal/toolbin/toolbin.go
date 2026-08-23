@@ -55,7 +55,7 @@ type layout struct {
 	Dev  bool   // 配布物ではなくソースツリーからの実行の場合 true
 }
 
-// detectLayout は実行バイナリの所在からレイアウトを確定する。
+// detectLayoutFor は実行バイナリの所在からレイアウトを確定する。
 //
 // 判定は配置済みレイアウトの定義そのものである「本体の隣に bin/ があるか」を
 // 直接確認する自己検証方式。OSの一時領域などの場所に基づく間接ヒューリスティックは
@@ -64,14 +64,6 @@ type layout struct {
 //   - ローカルで go build -o build/engram-opt.exe しても bin/ が隣にあるため配布扱い
 //     （開発・配布で同一のコードパスを通る）
 //   - ユーザーがZipをどのパスへ解凍しても正しく動作する
-func detectLayout() (layout, error) {
-	exe, err := os.Executable()
-	if err != nil {
-		return layout{}, fmt.Errorf("resolving executable: %w", err)
-	}
-	return detectLayoutFor(exe)
-}
-
 func detectLayoutFor(exePath string) (layout, error) {
 	base := filepath.Dir(exePath)
 	if FileExists(filepath.Join(base, "bin", ToolName("ffmpeg"))) {

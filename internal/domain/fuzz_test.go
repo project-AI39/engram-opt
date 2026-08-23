@@ -81,3 +81,20 @@ func FuzzScoreMetricRoundTrip(f *testing.F) {
 		}
 	})
 }
+
+func FuzzParseAudioMode(f *testing.F) {
+	for _, s := range []string{"copy", "opus", "aac", "none", "libopus", "COPY", "", "flac"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		m, err := ParseAudioMode(s)
+		if err != nil {
+			return
+		}
+		switch m {
+		case AudioCopy, AudioOpus, AudioAAC, AudioNone:
+		default:
+			t.Fatalf("parser produced non-constant mode %q from %q", m, s)
+		}
+	})
+}

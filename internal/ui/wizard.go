@@ -496,7 +496,7 @@ func (w *wizardForm) buildConfig() (domain.SearchConfig, error) {
 	}
 	// ウィザード入力は50〜100へ制限（memo.md A-5）。意味のある画質帯のみ受け付ける
 	if tgt < 50 || tgt > 100 {
-		return domain.SearchConfig{}, fmt.Errorf("Target VMAF %.1f out of range [50.0, 100.0]", tgt)
+		return domain.SearchConfig{}, fmt.Errorf("target VMAF %.1f out of range [50.0, 100.0]", tgt)
 	}
 
 	cfg := domain.SearchConfig{
@@ -513,12 +513,12 @@ func (w *wizardForm) buildConfig() (domain.SearchConfig, error) {
 	// Out Res はテキスト入力（"native" or WxH）。パース＋偶数検証はdomainへ一元
 	outW, outH, oerr := domain.ParseOutRes(w.outRes.Value())
 	if oerr != nil {
-		return domain.SearchConfig{}, fmt.Errorf("Out Res: %w", oerr)
+		return domain.SearchConfig{}, fmt.Errorf("out res: %w", oerr)
 	}
 	cfg.OutWidth, cfg.OutHeight = outW, outH
 	extraArgs, aerr := domain.ParseExtraArgs(w.encArgs.Value())
 	if aerr != nil {
-		return domain.SearchConfig{}, fmt.Errorf("Extra Args: %w", aerr)
+		return domain.SearchConfig{}, fmt.Errorf("extra args: %w", aerr)
 	}
 	cfg.ExtraArgs = extraArgs
 	if err := cfg.Validate(); err != nil {
