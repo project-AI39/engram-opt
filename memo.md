@@ -91,7 +91,7 @@ test/e2e/               # パイプライン全走査
   - フレーム番号への逆算は `round(pts_time × fps)`（誤差はフレーム周期より4桁以上小さく常に正しい枠に丸まる）。fpsはr_frame_rateを有理数のまま使用
   - キーフレームが1つも見つからない場合のみ警告ログ付きでフルデコードへフォールバック（性能最適化層のため可用性優先。仕様上の例外として報告必須）
   - 評価（libvmaf参照側の元動画入力）も同一機構でアンカーシークする
-  - 実装は `internal/media`（ProbeFrameRate / PlanSeek）に共通化
+  - 実装は `internal/media`（ProbeFrameRate / PlanSeek）に共通化。成功結果はプロセス内でキャッシュし試行ごとのffprobe再起動・パケット再走査を回避する（失敗は非キャッシュ＝engineのtransientリトライと両立）
 
 ## 4.3 評価プロファイル制と出力解像度
 

@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"math"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"engram-opt/internal/toolbin"
 )
@@ -20,9 +22,36 @@ type KeyAnchor struct {
 	Frame int64  // 動画全体でのフレーム番号（0-indexed）
 }
 
+// プロセス内キャッシュ: 入力ファイルは実行中に書き換わらないため、同一入力の
+// probe成功結果は不変。CRF二分探索は同一(入力,シーン)で複数試行するため、
+// 試行ごとのffprobe再起動・パケット再走査（後方シーンでは数百ms規模）を排除する。
+// 失敗はキャッシュしない（一時的故障が恒久化されるのを防ぎ、engineの
+// transientリトライと両立させる）。
+var (
+	fpsCache  sync.Map // key: cleaned input path -> fpsPair
+	seekCache sync.Map // key: seekCacheKey(input, startFrame) -> seekPlan
+)
+
+type fpsPair struct{ num, den int64 }
+
+type seekPlan struct {
+	ssArgs []string
+	offset int64
+}
+
+func seekCacheKey(input string, startFrame int64) string {
+	return filepath.Clean(input) + "\x00" + strconv.FormatInt(startFrame, 10)
+}
+
 // ProbeFrameRate は入力動画のフレームレートを有理数（num/den、ともに正の整数）で返す。
 // 浮動小数点へ落とさない（タイムスタンプ正規式・フレーム番号逆算にそのまま埋め込むため）。
+// 成功結果はプロセス内キャッシュされる（同一入力の再probe排除）。
 func ProbeFrameRate(ctx context.Context, ffprobePath, inputPath string) (int64, int64, error) {
+	key := filepath.Clean(inputPath)
+	if v, ok := fpsCache.Load(key); ok {
+		p := v.(fpsPair)
+		return p.num, p.den, nil
+	}
 	out, err := exec.CommandContext(ctx, ffprobePath,
 		"-v", "error", "-select_streams", "v:0",
 		"-show_entries", "stream=r_frame_rate",
@@ -41,6 +70,7 @@ func ProbeFrameRate(ctx context.Context, ffprobePath, inputPath string) (int64, 
 	if err1 != nil || err2 != nil || num <= 0 || den <= 0 {
 		return 0, 0, fmt.Errorf("invalid r_frame_rate %q", s)
 	}
+	fpsCache.Store(key, fpsPair{num: num, den: den})
 	return num, den, nil
 }
 
@@ -57,6 +87,11 @@ func PlanSeek(ctx context.Context, ffprobePath, input string, startFrame int64) 
 	if startFrame <= 0 {
 		return nil, 0, nil
 	}
+	key := seekCacheKey(input, startFrame)
+	if v, ok := seekCache.Load(key); ok {
+		p := v.(seekPlan)
+		return p.ssArgs, p.offset, nil
+	}
 	num, den, err := ProbeFrameRate(ctx, ffprobePath, input)
 	if err != nil {
 		return nil, 0, err
@@ -67,9 +102,14 @@ func PlanSeek(ctx context.Context, ffprobePath, input string, startFrame int64) 
 		return nil, 0, err
 	}
 	if !ok || anchor.Frame <= 0 {
+		// 「アンカー無し」もファイルと開始点で決まる不変の結果なのでキャッシュする
+		// （見つからないケースでの毎試行フル走査を回避）。
+		seekCache.Store(key, seekPlan{})
 		return nil, 0, nil
 	}
-	return []string{"-ss", anchor.PTS}, anchor.Frame, nil
+	plan := seekPlan{ssArgs: []string{"-ss", anchor.PTS}, offset: anchor.Frame}
+	seekCache.Store(key, plan)
+	return plan.ssArgs, plan.offset, nil
 }
 
 // lastKeyframeBefore は targetSec 以前（≤）で最後のキーフレームを実パケットから探す。
