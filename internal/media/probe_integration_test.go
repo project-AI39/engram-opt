@@ -1,6 +1,6 @@
-package ffmpeg
+package media
 
-// probe_dims.go の実機プローブ群（ffprobe必須のため統合テスト扱い）。
+// probe.go の実機プローブ群（ffprobe必須のため統合テスト扱い）。
 
 import (
 	"context"

@@ -1,4 +1,7 @@
-package ffmpeg
+// probe.go は ffprobe を用いた汎用メディア情報の取得を提供する。
+// エンコーダ固有ではなくCLI事前チェック等からも使われるため、
+// internal/media（媒体情報の共通取得）に配置する。
+package media
 
 import (
 	"bytes"

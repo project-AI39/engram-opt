@@ -16,6 +16,7 @@ import (
 	ffenc "engram-opt/internal/encoder/ffmpeg"
 	"engram-opt/internal/engine"
 	"engram-opt/internal/evaluator/libvmaf"
+	"engram-opt/internal/media"
 	"engram-opt/internal/toolbin"
 	"engram-opt/internal/ui"
 )
@@ -177,7 +178,7 @@ func runOptimize(cmd *cobra.Command, args []string, f runFlags) error {
 	}
 	if outW == 0 && input != "" {
 		// 未指定=入力動画と同じ解像度。実寸へ解決してログとウィザード初期値に使う
-		dw, dh, derr := ffenc.ProbeVideoDims(ctx, input)
+		dw, dh, derr := media.ProbeVideoDims(ctx, input)
 		if derr != nil {
 			return fmt.Errorf("resolving output resolution from input: %w", derr)
 		}
@@ -188,11 +189,11 @@ func runOptimize(cmd *cobra.Command, args []string, f runFlags) error {
 		// 単一フレーム等の極短入力はシーン検出器が処理できず内部エラーになるため、
 		// 探索開始前に分かりやすい形で拒否する。duration不明（エレメンタリ
 		// ストリーム等）は入力の不正ではないためスキップする
-		if dur, known := ffenc.ProbeDurationSeconds(ctx, input); known && dur < minInputDurationSeconds {
+		if dur, known := media.ProbeDurationSeconds(ctx, input); known && dur < minInputDurationSeconds {
 			return fmt.Errorf("input video is too short (%.3fs): at least a few frames are required", dur)
 		}
 		// 黙って落とす可能性のある構成（複数音声・字幕）を早期に周知する
-		for _, note := range ffenc.ProbeStreamNotes(ctx, input) {
+		for _, note := range media.ProbeStreamNotes(ctx, input) {
 			log.Printf("[optimize] note: %s", note)
 		}
 	}
