@@ -2,7 +2,6 @@ package libvmaf
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -69,25 +68,6 @@ func TestEvaluateIntegrationFrameMismatchDetection(t *testing.T) {
 	}
 }
 
-// genKeyedSource はキーフレーム位置を既知（-g 25）にした検証用ソースを生成する。
-func genKeyedSource(t testing.TB, dir string, seconds int) string {
-	t.Helper()
-	ffmpegPath, err := toolbin.Resolve("ffmpeg")
-	if err != nil {
-		t.Skipf("ffmpeg unavailable (%v)", err)
-	}
-	out := filepath.Join(dir, "keyed.mp4")
-	cmd := exec.Command(ffmpegPath,
-		"-hide_banner", "-nostdin", "-loglevel", "error", "-y",
-		"-f", "lavfi", "-i", fmt.Sprintf("testsrc2=size=320x240:rate=30:duration=%d", seconds),
-		"-c:v", "libx264", "-g", "25", "-crf", "18", "-pix_fmt", "yuv420p",
-		out)
-	if b, cerr := cmd.CombinedOutput(); cerr != nil {
-		t.Fatalf("generating keyed source failed: %v\n%s", cerr, b)
-	}
-	return out
-}
-
 // TestEvaluateAnchoredSeekParity:
 // 参照側のキーフレームアンカー事前シーク経路（現行 Evaluate）が、最適化前の
 // フルデコード相当（offset=0 のグラフ＋シーク無し）と同一スコアを返すことを担保する。
@@ -97,7 +77,7 @@ func TestEvaluateAnchoredSeekParity(t *testing.T) {
 	testutil.RequireBinaries(t, "ffmpeg", "ffprobe")
 	ctx := context.Background()
 
-	src := genKeyedSource(t, t.TempDir(), 5) // 150フレーム・キーは25間隔
+	src := testutil.GenerateKeyedSource(t, t.TempDir(), 5) // 150フレーム・キーは25間隔
 	scene := domain.Scene{Index: 3, StartFrame: 90, EndFrame: 149}
 
 	// 比較対象チャンク: 最適化前経路（フルデコードselect）で作る

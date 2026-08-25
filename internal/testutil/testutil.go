@@ -11,6 +11,7 @@ package testutil
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -222,4 +223,25 @@ func ProbeAudioStreams(t testing.TB, ctx context.Context, mediaPath string) []Au
 		streams = append(streams, AudioStreamInfo{CodecName: s.CodecName, Channels: s.Channels})
 	}
 	return streams
+}
+
+// GenerateKeyedSource はキーフレーム位置を既知（-g 25 → 0,25,50,...）にした
+// 検証用ソースを lavfi(testsrc2) で生成する。キーフレームアンカー事前シークの
+// 等価性検証など、同期点配置が重要なテストで使用する。
+func GenerateKeyedSource(t testing.TB, dir string, seconds int) string {
+	t.Helper()
+	ffmpegPath, err := toolbin.Resolve("ffmpeg")
+	if err != nil {
+		t.Skipf("ffmpeg unavailable (%v)", err)
+	}
+	out := filepath.Join(dir, "keyed.mp4")
+	cmd := exec.Command(ffmpegPath,
+		"-hide_banner", "-nostdin", "-loglevel", "error", "-y",
+		"-f", "lavfi", "-i", fmt.Sprintf("testsrc2=size=320x240:rate=30:duration=%d", seconds),
+		"-c:v", "libx264", "-g", "25", "-crf", "18", "-pix_fmt", "yuv420p",
+		out)
+	if b, cerr := cmd.CombinedOutput(); cerr != nil {
+		t.Fatalf("generating keyed source failed: %v\n%s", cerr, b)
+	}
+	return out
 }
