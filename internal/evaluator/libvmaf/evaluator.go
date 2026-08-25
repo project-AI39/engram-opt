@@ -21,10 +21,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
-	"strings"
 
 	"engram-opt/internal/domain"
+	"engram-opt/internal/media"
 	"engram-opt/internal/toolbin"
 )
 
@@ -69,9 +68,19 @@ func (e *Evaluator) Evaluate(ctx context.Context, originalPath string, scene dom
 	// フレームインデックスベースのタイムスタンプ正規化のために入力fps（整数比）を取得する。
 	// コンテナ間の時間基準差（mkv 1/1000 など）による丸めで framesync のペアリングが
 	// ずれる問題への根本対処（実測: 対策なしではPSNR 28dBまで崩壊）。
-	fpsNum, fpsDen, err := probeFrameRate(ctx, ffprobePath, originalPath)
+	fpsNum, fpsDen, err := media.ProbeFrameRate(ctx, ffprobePath, originalPath)
 	if err != nil {
 		return domain.QualityMetrics{}, fmt.Errorf("probing frame rate: %w", err)
+	}
+
+	// 参照側（元動画）もキーフレームアンカー事前シークする（memo.md §4.2）。
+	// 評価は試行ごとに走るため、先頭からの全デコード回避効果がエンコード側と同等に大きい。
+	refSeek, offset, err := media.PlanSeek(ctx, ffprobePath, originalPath, scene.StartFrame)
+	if err != nil {
+		return domain.QualityMetrics{}, err
+	}
+	if scene.StartFrame > 0 && offset == 0 {
+		log.Printf("[vmaf] no usable keyframe before frame %d; decoding reference from start", scene.StartFrame)
 	}
 
 	// ログ出力先は作業ディレクトリ配下の専用サブディレクトリ内の相対パス
@@ -91,14 +100,14 @@ func (e *Evaluator) Evaluate(ctx context.Context, originalPath string, scene dom
 	}()
 
 	var err2 error
-	metrics, err2 = e.evaluateWithProfile(ctx, ffmpegPath, evalDir, originalPath, scene, encodedChunkPath, profile, fpsNum, fpsDen)
+	metrics, err2 = e.evaluateWithProfile(ctx, ffmpegPath, evalDir, originalPath, scene, encodedChunkPath, profile, fpsNum, fpsDen, refSeek, offset)
 	if err2 != nil {
 		return domain.QualityMetrics{}, err2 // フェイルファスト: 暗黙のモデル切替はしない
 	}
 	return metrics, nil
 }
 
-func (e *Evaluator) evaluateWithProfile(ctx context.Context, ffmpegPath, workDir, originalPath string, scene domain.Scene, chunkPath string, profile domain.EvalProfile, fpsNum, fpsDen int64) (domain.QualityMetrics, error) {
+func (e *Evaluator) evaluateWithProfile(ctx context.Context, ffmpegPath, workDir, originalPath string, scene domain.Scene, chunkPath string, profile domain.EvalProfile, fpsNum, fpsDen int64, refSeek []string, offset int64) (domain.QualityMetrics, error) {
 	// 入力0: エンコード済みチャンク（main=劣化側）
 	// 入力1: 元動画の該当シーン区間（reference=参照側）
 	//
@@ -111,14 +120,17 @@ func (e *Evaluator) evaluateWithProfile(ctx context.Context, ffmpegPath, workDir
 	//   （frame duration = fpsDen/fpsNum 秒 = ちょうど fpsDen tick。任意の有理数fpsで
 	//     厳密に整数になるため誤差ゼロ。）
 	//   select 後の setpts の N は「選択通過フレーム」の連番になるため部分区間でも正しい。
-	graph := buildEvalGraph(scene, profile, fpsNum, fpsDen)
+	graph := buildEvalGraph(scene, profile, fpsNum, fpsDen, offset)
 
-	cmd := exec.CommandContext(ctx, ffmpegPath,
-		"-hide_banner", "-nostdin", "-loglevel", "error",
-		"-i", chunkPath,
-		"-i", originalPath,
+	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
+	// 入力0: エンコード済みチャンク（main=劣化側。チャンクは区間済みのためシーク不要）
+	args = append(args, "-i", chunkPath)
+	// 入力1: 元動画の該当シーン区間（reference=参照側。アンカー事前シークを先頭に挿入）
+	args = append(args, refSeek...)
+	args = append(args, "-i", originalPath,
 		"-filter_complex", graph,
 		"-f", "null", "-")
+	cmd := exec.CommandContext(ctx, ffmpegPath, args...)
 	cmd.Dir = workDir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return domain.QualityMetrics{}, fmt.Errorf("libvmaf run failed (profile=%s model=%s): %w\n%s",
@@ -140,10 +152,14 @@ func (e *Evaluator) evaluateWithProfile(ctx context.Context, ffmpegPath, workDir
 //     解像度へ正規化しないとスコアがずれ、正しいCRF境界を見つけられないため。
 //   - 両側が同一変形を受けるため、比較の公平性は保たれる。
 //   - select→タイムスタンプ正規化→scale の順で、部分区間でもPTS整合を保つ。
-func buildEvalGraph(scene domain.Scene, profile domain.EvalProfile, fpsNum, fpsDen int64) string {
+//
+// offset>0 のとき参照側入力はキーフレームアンカー（絶対フレームoffset）へ
+// 入力シーク済みのため、select範囲はアンカー起点へ平行移動した値を使う
+// （出力されるフレーム群はフルデコードとビット一致。memo.md §4.2）。
+func buildEvalGraph(scene domain.Scene, profile domain.EvalProfile, fpsNum, fpsDen int64, offset int64) string {
 	stamp := fmt.Sprintf("settb=1/%d,setpts=%d*N", fpsNum, fpsDen)
 	refChain := fmt.Sprintf("select='between(n,%d,%d)',%s,scale=%d:%d",
-		scene.StartFrame, scene.EndFrame, stamp, profile.Width, profile.Height)
+		scene.StartFrame-offset, scene.EndFrame-offset, stamp, profile.Width, profile.Height)
 	distChain := fmt.Sprintf("%s,scale=%d:%d", stamp, profile.Width, profile.Height)
 	return fmt.Sprintf("[1:v]%s[r];[0:v]%s[d];[d][r]libvmaf=log_fmt=json:log_path=%s:model='version=%s':shortest=1:eof_action=endall",
 		refChain, distChain, logFileName, profile.Model)
@@ -151,27 +167,7 @@ func buildEvalGraph(scene domain.Scene, profile domain.EvalProfile, fpsNum, fpsD
 
 // probeFrameRate は元動画のフレームレートを有理数（num/den、ともに整数）で取得する。
 // タイムスタンプ正規化式にそのまま埋め込むため、浮動小数点には落とさない。
-func probeFrameRate(ctx context.Context, ffprobePath, inputPath string) (int64, int64, error) {
-	out, err := exec.CommandContext(ctx, ffprobePath,
-		"-v", "error", "-select_streams", "v:0",
-		"-show_entries", "stream=r_frame_rate",
-		"-of", "default=noprint_wrappers=1:nokey=1",
-		inputPath).CombinedOutput()
-	if err != nil {
-		return 0, 0, fmt.Errorf("ffprobe (frame rate) failed: %w\n%s", err, toolbin.Tail(string(out), 5))
-	}
-	s := strings.TrimSpace(string(out))
-	numStr, denStr, ok := strings.Cut(s, "/")
-	if !ok {
-		numStr, denStr = s, "1"
-	}
-	num, err1 := strconv.ParseInt(numStr, 10, 64)
-	den, err2 := strconv.ParseInt(denStr, 10, 64)
-	if err1 != nil || err2 != nil || num <= 0 || den <= 0 {
-		return 0, 0, fmt.Errorf("invalid r_frame_rate %q", s)
-	}
-	return num, den, nil
-}
+// （共通実装は internal/media.ProbeFrameRate へ一元。）
 
 // ===== レポート解析 =====
 

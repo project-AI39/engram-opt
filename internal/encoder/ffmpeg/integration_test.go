@@ -2,6 +2,7 @@ package ffmpeg
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -263,5 +264,89 @@ func TestEncodeChunkAV1RejectsNamedPresetIntegration(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "numeric preset") {
 		t.Fatalf("err = %v, want numeric-preset guidance", err)
+	}
+}
+
+// genKeyedSource はキーフレーム位置を既知（-g 25 → 0,25,50,...）にした検証用ソースを
+// lavfiで生成する。アンカー事前シークの等価性検証専用（内容は可変パターンで実写近似）。
+func genKeyedSource(t testing.TB, dir string, seconds int) string {
+	t.Helper()
+	ffmpegPath, err := toolbin.Resolve("ffmpeg")
+	if err != nil {
+		t.Skipf("ffmpeg unavailable (%v)", err)
+	}
+	out := filepath.Join(dir, "keyed.mp4")
+	cmd := exec.Command(ffmpegPath,
+		"-hide_banner", "-nostdin", "-loglevel", "error", "-y",
+		"-f", "lavfi", "-i", fmt.Sprintf("testsrc2=size=320x240:rate=30:duration=%d", seconds),
+		"-c:v", "libx264", "-g", "25", "-crf", "18", "-pix_fmt", "yuv420p",
+		out)
+	if b, cerr := cmd.CombinedOutput(); cerr != nil {
+		t.Fatalf("generating keyed source failed: %v\n%s", cerr, b)
+	}
+	return out
+}
+
+// decodedSHA256 は動画のデコード後生フレーム列のハッシュを返す
+// （コンテナ差分に影響されない「フレーム完全一致」検証用。10-bit生で正規化）。
+func decodedSHA256(t testing.TB, video string) string {
+	t.Helper()
+	ffmpegPath, err := toolbin.Resolve("ffmpeg")
+	if err != nil {
+		t.Fatalf("ffmpeg unavailable: %v", err)
+	}
+	cmd := exec.Command(ffmpegPath,
+		"-hide_banner", "-nostdin", "-loglevel", "error",
+		"-i", video,
+		"-f", "rawvideo", "-pix_fmt", "yuv420p10le", "-")
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	h := sha256.New()
+	cmd.Stdout = h
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("decoding %s failed: %v\n%s", video, err, stderr.String())
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+// TestEncodeChunkAnchoredSeekEquivalence:
+// キーフレームアンカー事前シーク経路（現行 EncodeChunk）と、最適化前のフルデコード相当の
+// 手組みffmpegコマンドの出力がフレームレベルで完全一致することを担保する
+// （memo.md §4.2/§8.1。デコード開始点が同期点IDRに限られるため等価が成立する）。
+// 中間区間 [40..99]（開始40 = 直前キー25から15フレームの残差デコード）で検証する。
+func TestEncodeChunkAnchoredSeekEquivalence(t *testing.T) {
+	testutil.RequireBinaries(t, "ffmpeg", "ffprobe")
+	ctx := context.Background()
+
+	src := genKeyedSource(t, t.TempDir(), 5) // 150フレーム・キーは25間隔
+
+	scene := domain.Scene{Index: 1, StartFrame: 40, EndFrame: 99}
+	params := domain.EncodeParams{Codec: domain.CodecH264, CRF: 18, Preset: "medium", BitDepth: 10}
+
+	anchored := filepath.Join(t.TempDir(), "anchored.mkv")
+	if err := New().EncodeChunk(ctx, src, scene, params, anchored); err != nil {
+		t.Fatalf("EncodeChunk (anchored) failed: %v", err)
+	}
+
+	// 最適化前経路の再現: -ss無し・絶対フレーム番号のselect（旧buildSelectVF相当）
+	legacy := filepath.Join(t.TempDir(), "legacy.mkv")
+	ffmpegPath, rerr := toolbin.Resolve("ffmpeg")
+	if rerr != nil {
+		t.Fatalf("ffmpeg unavailable: %v", rerr)
+	}
+	refCmd := exec.Command(ffmpegPath,
+		"-hide_banner", "-nostdin", "-loglevel", "error", "-y",
+		"-i", src,
+		"-vf", "select='between(n,40,99)',setpts=PTS-STARTPTS",
+		"-frames:v", "60", "-pix_fmt", "yuv420p10le", "-g", "60",
+		"-c:v", "libx264", "-preset", "medium", "-crf", "18",
+		"-an", legacy)
+	if b, err := refCmd.CombinedOutput(); err != nil {
+		t.Fatalf("legacy full-decode reference failed: %v\n%s", err, b)
+	}
+
+	gotA, gotL := decodedSHA256(t, anchored), decodedSHA256(t, legacy)
+	if gotA != gotL {
+		t.Fatalf("anchored output differs from full-decode reference\nanchored=%s\nlegacy  =%s", gotA, gotL)
 	}
 }

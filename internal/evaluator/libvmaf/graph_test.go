@@ -28,7 +28,7 @@ func TestBuildEvalGraphNormalizesBothInputs(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		g := buildEvalGraph(sc, tc.profile, 24000, 1001)
+		g := buildEvalGraph(sc, tc.profile, 24000, 1001, 0)
 		if n := strings.Count(g, tc.wantScale); n != 2 {
 			t.Fatalf("profile %s: scale=%q appears %d times, want 2 (both inputs): %s", tc.profile.Name, tc.wantScale, n, g)
 		}
@@ -45,5 +45,15 @@ func TestBuildEvalGraphNormalizesBothInputs(t *testing.T) {
 		if n := strings.Count(g, "settb=1/24000,setpts=1001*N"); n != 2 {
 			t.Fatalf("timestamp normalization must appear on both chains (%d): %s", n, g)
 		}
+	}
+}
+
+// offset>0（キーフレームアンカー事前シーク時）はselect範囲がアンカー起点へ平行移動する。
+func TestBuildEvalGraphShiftsSelectByAnchorOffset(t *testing.T) {
+	sc := domain.Scene{Index: 3, StartFrame: 120, EndFrame: 179}
+	g := buildEvalGraph(sc, domain.DefaultEvalProfile(), 30, 1, 90)
+
+	if !strings.Contains(g, "select='between(n,30,89)'") {
+		t.Fatalf("select range must be shifted by offset (120-90..179-90): %s", g)
 	}
 }

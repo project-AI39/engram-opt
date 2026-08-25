@@ -2,9 +2,11 @@
 //
 // フレーム完全一致の方針:
 //   - チャンク抽出は select フィルタに整数フレーム番号を渡して行う
-//     （-ss の浮動小数点秒指定は丸め誤差でVMAF評価を壊すため禁止）。
-//   - select は先頭からデコードするため後方シーンほど前処理コストがかかるが、
-//     正確性を優先する。高速化は必要になってから検討する。
+//     （-ss を素の浮動小数点秒で使う丸め誤差問題は、キーフレームアンカー＝
+//     実在同期点の実測ptsによる入力シーク（memo.md §4.2）で回避する）。
+//   - StartFrame>0 の試行は直前キーフレームへ事前シークし select 範囲を平行移動する。
+//     デコード開始点がIDRに限定されるため出力はフルデコードとビット一致し、
+//     後方シーンでも毎回先頭からデコードし直す無駄が消える。
 //
 // キーフレーム方針: チャンク先頭は必ずIDR（ストリームコピー結合の前提）。
 // 以降の適応的キーフレーム挿入はエンコーダー判断に委ねる（圧縮効率・品質優先）。
@@ -13,6 +15,7 @@ package ffmpeg
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,6 +23,7 @@ import (
 	"strings"
 
 	"engram-opt/internal/domain"
+	"engram-opt/internal/media"
 	"engram-opt/internal/toolbin"
 )
 
@@ -53,6 +57,24 @@ func (e *Encoder) EncodeChunk(ctx context.Context, inputPath string, scene domai
 		return err
 	}
 
+	// キーフレームアンカー事前シーク（memo.md §4.2）。
+	// StartFrame>0 のとき直前キーフレームの実測ptsで入力シークし、select範囲を
+	// アンカー起点へ平行移動する（出力はフルデコードとビット一致）。
+	ffprobePath, err := toolbin.Resolve("ffprobe")
+	if err != nil {
+		return err
+	}
+	ssArgs, offset, err := media.PlanSeek(ctx, ffprobePath, inputPath, scene.StartFrame)
+	if err != nil {
+		return err
+	}
+	if scene.StartFrame > 0 && offset == 0 {
+		log.Printf("[encode] no usable keyframe before frame %d; decoding from start", scene.StartFrame)
+	}
+	selectScene := scene
+	selectScene.StartFrame -= offset
+	selectScene.EndFrame -= offset
+
 	// 共通引数: シーン区間のみを選択（整数フレーム番号）し、タイムスタンプを0起点へ正規化。
 	// 出力リサイズ指定時（--out-res）は select の末尾へ scale を連結する
 	// （フレーム番号はリサイズ前の元動画基準のため、順序の入れ替えは不可）。
@@ -61,14 +83,15 @@ func (e *Encoder) EncodeChunk(ctx context.Context, inputPath string, scene domai
 	//   - 先頭フレームは常にIDRになる（全エンコーダ共通の保証）
 	//   - GOP長の上限をシーン長に固定することで、長尺静止シーンでも周期IDRが
 	//     チャンク内に侵入しない（周期IDRは必ずチャンク終端以降に落ちる）
-	args := []string{
-		"-hide_banner", "-nostdin", "-loglevel", "error", "-y",
+	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-y"}
+	args = append(args, ssArgs...)
+	args = append(args,
 		"-i", inputPath,
-		"-vf", buildSelectVF(scene, params.OutWidth, params.OutHeight),
+		"-vf", buildSelectVF(selectScene, params.OutWidth, params.OutHeight),
 		"-frames:v", gop,
 		"-pix_fmt", pixFmt,
 		"-g", gop,
-	}
+	)
 
 	switch params.Codec {
 	case domain.CodecH264:
